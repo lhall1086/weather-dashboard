@@ -1,0 +1,17 @@
+{
+  "name": "weather-dashboard",
+  "version": "1.0.0",
+  "description": "Local weather dashboard fed by an Ambient Weather Network station, with SQLite history and NWS forecast.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "collect": "node collector.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "node-cron": "^3.0.3",
+    "socket.io-client": "^2.5.0"
+  }
+}

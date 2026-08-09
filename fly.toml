@@ -1,0 +1,28 @@
+app = "local-weather-labs"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "3000"
+  NODE_ENV = "production"
+  LAT = "32.5776"
+  LON = "-85.7583"
+  COLLECT_CRON = "*/5 * * * *"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
+
+[[mounts]]
+  source = "weather_data"
+  destination = "/app/data"

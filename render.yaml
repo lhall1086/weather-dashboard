@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: local-weather-labs
+    env: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: NODE_ENV
+        value: production
+      - key: AWN_API_KEY
+        sync: false
+      - key: AWN_APP_KEY
+        sync: false
+      - key: AWN_MAC
+        sync: false
+      - key: LAT
+        value: 32.5776
+      - key: LON
+        value: -85.7583
+      - key: COLLECT_CRON
+        value: "*/5 * * * *"
+    healthCheckPath: /

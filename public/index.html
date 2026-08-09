@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Local Weather Labs</title>
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Leaflet for interactive maps -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Chart.js + a time adapter for time-axis charts (no build step needed) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Local Weather Labs</h1>
+    <div class="meta">
+      <span id="updated">—</span>
+      <span id="source-badge" class="badge"></span>
+    </div>
+  </header>
+
+  <!-- Active watches/warnings/advisories -->
+  <section class="alerts-banner" id="alerts-banner" style="display:none;" aria-live="polite">
+    <!-- injected by app.js when alerts exist -->
+  </section>
+
+  <!-- Today / Tomorrow Briefing -->
+  <section class="briefing-section">
+    <div class="briefing-card" id="today-card">
+      <h2>Today</h2>
+      <div class="briefing-content">—</div>
+    </div>
+    <div class="briefing-card" id="tomorrow-card">
+      <h2>Tomorrow</h2>
+      <div class="briefing-content">—</div>
+    </div>
+  </section>
+
+  <!-- SPC Severe Weather Outlook Timeline -->
+  <section class="spc-section">
+    <div class="card">
+      <h2>Severe Weather Outlook <small>(SPC)</small></h2>
+      <div class="spc-timeline" id="spc-timeline">—</div>
+    </div>
+  </section>
+
+  <!-- Current conditions -->
+  <section class="tiles" id="tiles" aria-label="Current conditions">
+    <!-- tiles injected by app.js -->
+  </section>
+
+  <!-- Derived Meteorological Indices -->
+  <section class="indices-section">
+    <div class="card">
+      <h2>Meteorological Indices</h2>
+      <div class="indices-grid" id="indices">—</div>
+    </div>
+  </section>
+
+  <!-- Wind + pressure tendency + precipitation analysis row -->
+  <section class="row triple">
+    <div class="card compass-card">
+      <h2>Wind</h2>
+      <div class="compass" id="compass">
+        <div class="needle" id="needle"></div>
+        <span class="tick n">N</span><span class="tick e">E</span>
+        <span class="tick s">S</span><span class="tick w">W</span>
+      </div>
+      <div class="compass-readout">
+        <span id="wind-speed">—</span> mph
+        <small>gust <span id="wind-gust">—</span> · <span id="wind-dir-label">—</span></small>
+      </div>
+    </div>
+
+    <div class="card tendency-card">
+      <h2>Local Nowcast <small>(3h pressure)</small></h2>
+      <div id="tendency-content">—</div>
+    </div>
+
+    <div class="card precip-card">
+      <h2>Precipitation Analysis</h2>
+      <div id="precip-content">—</div>
+    </div>
+  </section>
+
+  <!-- 7-Day Extended Forecast -->
+  <section class="forecast-section">
+    <div class="card">
+      <h2>7-Day Forecast</h2>
+      <div class="forecast-7day" id="forecast-7day"><!-- daily cards injected --></div>
+    </div>
+  </section>
+
+  <!-- Regional Map -->
+  <section class="map-section">
+    <div class="card">
+      <h2>Tallapoosa County & Region</h2>
+      <div class="map-controls">
+        <label class="map-toggle">
+          <input type="checkbox" id="toggle-temps" checked />
+          <span>Temperatures</span>
+        </label>
+        <label class="map-toggle">
+          <input type="checkbox" id="toggle-satellite" />
+          <span>Satellite</span>
+        </label>
+        <label class="map-toggle">
+          <input type="checkbox" id="toggle-precipitation" />
+          <span>Precipitation</span>
+        </label>
+        <label class="map-toggle">
+          <input type="checkbox" id="toggle-alerts" checked />
+          <span>Active Alerts</span>
+        </label>
+      </div>
+      <div id="regional-map" class="regional-map"></div>
+    </div>
+  </section>
+
+  <!-- Radar & Resources Links -->
+  <section class="forecast-section">
+    <div class="card">
+      <h2>Radar & Resources</h2>
+      <div class="radar-links">
+        <a href="https://radar.weather.gov/ridge/standard/KMXX_loop.gif" target="_blank" class="radar-link">
+          <span class="radar-icon">📡</span>
+          <div class="radar-info">
+            <div class="radar-name">Local Radar (KMXX)</div>
+            <div class="radar-desc">Maxwell AFB · Your nearest WSR-88D</div>
+          </div>
+        </a>
+        <a href="https://radar.weather.gov/ridge/standard/SOUTHEAST_loop.gif" target="_blank" class="radar-link">
+          <span class="radar-icon">🌩️</span>
+          <div class="radar-info">
+            <div class="radar-name">Regional Mosaic</div>
+            <div class="radar-desc">Southeast US radar composite</div>
+          </div>
+        </a>
+        <a href="https://www.weather.gov/bmx/" target="_blank" class="radar-link">
+          <span class="radar-icon">🏢</span>
+          <div class="radar-info">
+            <div class="radar-name">NWS Birmingham</div>
+            <div class="radar-desc">Your local forecast office</div>
+          </div>
+        </a>
+        <a href="https://www.cpc.ncep.noaa.gov/" target="_blank" class="radar-link">
+          <span class="radar-icon">📊</span>
+          <div class="radar-info">
+            <div class="radar-name">Climate Prediction Center</div>
+            <div class="radar-desc">Long-range outlooks & climate forecasts</div>
+          </div>
+        </a>
+        <a href="https://www.nhc.noaa.gov/" target="_blank" class="radar-link">
+          <span class="radar-icon">🌀</span>
+          <div class="radar-info">
+            <div class="radar-name">National Hurricane Center</div>
+            <div class="radar-desc">Tropical storms & hurricane forecasts</div>
+          </div>
+        </a>
+        <a href="https://www.spc.noaa.gov/products/md/" target="_blank" class="radar-link">
+          <span class="radar-icon">⚠️</span>
+          <div class="radar-info">
+            <div class="radar-name">Mesoscale Discussions</div>
+            <div class="radar-desc">SPC active MDs & short-term severe updates</div>
+          </div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Hourly forecast (next 24h) -->
+  <section class="forecast-section">
+    <div class="card">
+      <h2>Hourly Forecast</h2>
+      <div class="forecast-strip" id="forecast-hourly"><!-- hourly periods injected --></div>
+    </div>
+  </section>
+
+  <!-- Year-over-Year Analytics -->
+  <section class="analytics-section">
+    <div class="card">
+      <h2>Historical Analytics <small>(Trending Comparison)</small></h2>
+      <div id="yoy-summary" class="yoy-summary">Loading...</div>
+      <div class="yoy-charts">
+        <div class="chart-wrap"><canvas id="yoyTempChart"></canvas></div>
+        <div class="chart-wrap"><canvas id="yoyRainChart"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Trend charts -->
+  <section class="charts">
+    <div class="card">
+      <div class="chart-head">
+        <h2>Trends</h2>
+        <div class="range-buttons" id="range-buttons" role="group" aria-label="History range">
+          <button data-range="24h" class="active">24h</button>
+          <button data-range="7d">7d</button>
+          <button data-range="30d">30d</button>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="tempChart"></canvas></div>
+      <div class="chart-wrap"><canvas id="rainChart"></canvas></div>
+      <div class="chart-wrap"><canvas id="pressureChart"></canvas></div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    Station data via Ambient Weather Network · Forecast via NWS ·
+    <span id="foot-note"></span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
