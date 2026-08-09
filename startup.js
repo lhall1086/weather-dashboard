@@ -1,32 +1,45 @@
-// Startup script - runs backfill if database is empty, then starts server
+// Startup script - starts server immediately, runs backfill in background if needed
 import { getLatest } from './db.js';
-import { execSync } from 'child_process';
+import { exec } from 'child_process';
 
 async function startup() {
   console.log('[startup] Checking database...');
+
+  let needsBackfill = false;
 
   try {
     const latest = getLatest();
 
     if (!latest) {
-      console.log('[startup] Database is empty. Running backfill for last 30 days...');
-      console.log('[startup] This will take 1-2 minutes. Please wait...');
-
-      // Run backfill synchronously (blocks until complete)
-      execSync('node backfill.js', { stdio: 'inherit' });
-
-      console.log('[startup] Backfill complete! Starting server...');
+      console.log('[startup] Database is empty. Will run backfill in background after server starts.');
+      needsBackfill = true;
     } else {
       console.log('[startup] Database has data. Latest reading:', latest.dateutc);
-      console.log('[startup] Starting server...');
     }
   } catch (err) {
     console.warn('[startup] Could not check database:', err.message);
-    console.log('[startup] Starting server anyway...');
   }
 
-  // Start the main server
+  // Start the main server FIRST (so Render sees open port)
+  console.log('[startup] Starting server...');
   import('./server.js');
+
+  // Run backfill in background if needed (doesn't block server)
+  if (needsBackfill) {
+    console.log('[startup] Starting background backfill for last 30 days...');
+    console.log('[startup] Server is running, data will populate in 1-2 minutes.');
+
+    // Run in background - don't wait for it to finish
+    exec('node backfill.js', (error, stdout, stderr) => {
+      if (error) {
+        console.error('[startup] Backfill error:', error.message);
+        return;
+      }
+      if (stdout) console.log('[backfill]', stdout);
+      if (stderr) console.error('[backfill]', stderr);
+      console.log('[startup] Background backfill complete!');
+    });
+  }
 }
 
 startup();

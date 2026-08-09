@@ -22,4 +22,4 @@ services:
         value: -85.7583
       - key: COLLECT_CRON
         value: "*/5 * * * *"
-    healthCheckPath: /
+    healthCheckPath: /health

@@ -255,6 +255,11 @@ app.get('/api/alerts/geojson', async (req, res) => {
   }
 });
 
+// Health check endpoint for Render
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: Date.now() });
+});
+
 // Serve the dashboard.
 app.use(express.static(join(__dirname, 'public')));
 
