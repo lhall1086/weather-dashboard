@@ -4,7 +4,9 @@
   "description": "Local weather dashboard fed by an Ambient Weather Network station, with SQLite history and NWS forecast.",
   "type": "module",
   "scripts": {
-    "start": "node server.js",
+    "start": "node startup.js",
+    "start:server": "node server.js",
+    "backfill": "node backfill.js",
     "collect": "node collector.js"
   },
   "dependencies": {
