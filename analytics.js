@@ -34,6 +34,7 @@ function getComparisonRanges() {
 }
 
 // Aggregate KPIs for a date range.
+// For rain: AWN's dailyrainin resets at midnight, so we sum the MAX dailyrainin per day.
 function aggregateKPIs(startMs, endMs) {
   const rows = db
     .prepare(
@@ -43,7 +44,6 @@ function aggregateKPIs(startMs, endMs) {
         MIN(tempf) as minTemp,
         AVG(humidity) as avgHumidity,
         AVG(baromrelin) as avgPressure,
-        SUM(hourlyrainin) as totalRain,
         AVG(windspeedmph) as avgWind,
         MAX(windgustmph) as maxGust,
         COUNT(*) as recordCount
@@ -52,7 +52,22 @@ function aggregateKPIs(startMs, endMs) {
     )
     .get(startMs, endMs);
 
-  return rows;
+  // Calculate total rainfall: sum of max daily rain for each day in range
+  // dailyrainin resets at midnight, so MAX per day gives us actual daily total
+  const rainfall = db
+    .prepare(
+      `SELECT SUM(daily_max) as totalRain
+       FROM (
+         SELECT DATE(dateutc / 1000, 'unixepoch') as day,
+                MAX(dailyrainin) as daily_max
+         FROM readings
+         WHERE dateutc >= ? AND dateutc <= ?
+         GROUP BY day
+       )`
+    )
+    .get(startMs, endMs);
+
+  return { ...rows, totalRain: rainfall?.totalRain || 0 };
 }
 
 // Period-over-period comparison summary (year-over-year or month-over-month).
