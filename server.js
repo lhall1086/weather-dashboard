@@ -9,7 +9,7 @@ import { fetchForecast, fetchHourly, fetchAlerts, getLocationLabel, fetch7Day } 
 import { fetchOutlook } from './spc.js';
 import { computeIndices } from './indices.js';
 import { getStormTotal, getHourlyIntensity, getRecentRainfall } from './precip.js';
-import { fetchObservations, fetchNationwideObservations } from './observations.js';
+import { fetchObservations, fetchNationwideObservations, fetchObservationsByBounds } from './observations.js';
 import { getYoYComparison, getMonthlyComparison } from './analytics.js';
 import { getHistory, getLatest, insertReading, getPressureTendency } from './db.js';
 import { startCollector } from './collector.js';
@@ -132,8 +132,20 @@ app.get('/api/precip', (req, res) => {
 });
 
 // Observation stations with current temps (for map overlay).
+// Preferred: ?bbox=minLat,minLon,maxLat,maxLon returns every reporting station in
+// the current map view (works at all zooms/regions). Falls back to the fixed lists.
 app.get('/api/observations', async (req, res) => {
   try {
+    if (req.query.bbox) {
+      const parts = req.query.bbox.split(',').map(Number);
+      if (parts.length !== 4 || parts.some(Number.isNaN)) {
+        return res.status(400).json({ error: 'bbox must be minLat,minLon,maxLat,maxLon' });
+      }
+      const [minLat, minLon, maxLat, maxLon] = parts;
+      const stations = await fetchObservationsByBounds(minLat, minLon, maxLat, maxLon);
+      return res.json({ stations });
+    }
+
     // If nationwide requested, fetch major US cities
     if (req.query.nationwide === 'true') {
       const stations = await fetchNationwideObservations();
@@ -218,39 +230,129 @@ app.get('/api/alerts', async (req, res) => {
   }
 });
 
-// NWS active alerts GeoJSON for map display (nationwide, filtered for severe alerts only).
+// The severe alert types we render on the map (matches NWS `event` values exactly).
+const MAP_ALERT_TYPES = [
+  'Tornado Watch',
+  'Tornado Warning',
+  'Severe Thunderstorm Watch',
+  'Severe Thunderstorm Warning',
+  'Flood Watch',
+  'Flood Warning',
+];
+const NWS_HEADERS = { 'User-Agent': 'local-weather-dashboard (contact: you@example.com)', Accept: 'application/geo+json' };
+
+// --- NWS zone geometry cache (zones are static; cache aggressively) ---
+const zoneGeomCache = new Map(); // zoneUrl -> { at, geom }
+const ZONE_TTL = 24 * 60 * 60 * 1000; // 24h
+
+// Run async `fn` over `items` with at most `limit` in flight. NWS throttles bursts,
+// so unbounded Promise.all over hundreds of zones stalls; a small pool stays fast.
+async function mapPool(items, limit, fn) {
+  const results = new Array(items.length);
+  let idx = 0;
+  async function worker() {
+    while (idx < items.length) {
+      const i = idx++;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+async function fetchZoneGeometry(zoneUrl) {
+  const cached = zoneGeomCache.get(zoneUrl);
+  if (cached && Date.now() - cached.at < ZONE_TTL) return cached.geom;
+  try {
+    const res = await fetch(zoneUrl, { headers: NWS_HEADERS });
+    if (!res.ok) throw new Error(`zone ${res.status}`);
+    const zone = await res.json();
+    const geom = zone.geometry || null;
+    zoneGeomCache.set(zoneUrl, { at: Date.now(), geom });
+    return geom;
+  } catch (err) {
+    zoneGeomCache.set(zoneUrl, { at: Date.now(), geom: null });
+    return null;
+  }
+}
+
+// Assemble a MultiPolygon for a zone-based alert from an already-resolved zone map.
+function geometryFromZoneMap(zoneUrls, resolved) {
+  const polygons = [];
+  for (const url of zoneUrls || []) {
+    const g = resolved.get(url);
+    if (!g) continue;
+    if (g.type === 'Polygon') polygons.push(g.coordinates);
+    else if (g.type === 'MultiPolygon') polygons.push(...g.coordinates);
+  }
+  if (!polygons.length) return null;
+  return { type: 'MultiPolygon', coordinates: polygons };
+}
+
+// --- assembled alerts cache (stale-while-revalidate) ---
+let alertsCache = { at: 0, data: null };
+let alertsBuilding = null; // in-flight build promise (dedupes concurrent builds)
+const ALERTS_TTL = 2 * 60 * 1000; // consider cache fresh for 2 min
+
+// Fetch active alerts, resolve zone-based ones (watches) into real geometry, and
+// cache the assembled FeatureCollection. NWS warnings are storm-based (inline
+// polygon); watches are zone-based (null geometry) — resolving zones is what makes
+// tornado/thunderstorm/flood WATCHES appear, not just warnings.
+async function buildAlertsGeoJSON() {
+  const alertsRes = await fetch('https://api.weather.gov/alerts/active', { headers: NWS_HEADERS });
+  if (!alertsRes.ok) throw new Error(`NWS alerts failed: ${alertsRes.status}`);
+  const data = await alertsRes.json();
+
+  const wanted = data.features.filter((f) => MAP_ALERT_TYPES.includes(f.properties?.event));
+
+  // Dedup every zone URL across all zone-based alerts, then resolve once with a pool.
+  const zoneSet = new Set();
+  for (const f of wanted) {
+    if (!f.geometry) for (const z of f.properties?.affectedZones || []) zoneSet.add(z);
+  }
+  const zoneUrls = [...zoneSet];
+  const resolved = new Map();
+  await mapPool(zoneUrls, 12, async (url) => {
+    resolved.set(url, await fetchZoneGeometry(url));
+  });
+
+  const features = [];
+  for (const f of wanted) {
+    if (f.geometry) { features.push(f); continue; }
+    const geom = geometryFromZoneMap(f.properties?.affectedZones, resolved);
+    if (geom) features.push({ ...f, geometry: geom });
+  }
+
+  const counts = {};
+  for (const f of features) counts[f.properties.event] = (counts[f.properties.event] || 0) + 1;
+
+  const collection = { type: 'FeatureCollection', features, counts, generated: Date.now() };
+  alertsCache = { at: Date.now(), data: collection };
+  console.log('[alerts] built:', features.length, 'features', JSON.stringify(counts));
+  return collection;
+}
+
+// Refresh guarded so only one build runs at a time.
+function refreshAlerts() {
+  if (alertsBuilding) return alertsBuilding;
+  alertsBuilding = buildAlertsGeoJSON().finally(() => { alertsBuilding = null; });
+  return alertsBuilding;
+}
+
+// NWS active alerts GeoJSON for the map. Always responds fast from cache; a stale
+// cache triggers a background refresh. Only a cold start awaits the first build.
 app.get('/api/alerts/geojson', async (req, res) => {
   try {
-    const alertsRes = await fetch('https://api.weather.gov/alerts/active', {
-      headers: { 'User-Agent': 'local-weather-dashboard (contact: you@example.com)' }
-    });
-
-    if (!alertsRes.ok) {
-      throw new Error(`NWS alerts failed: ${alertsRes.status}`);
+    const now = Date.now();
+    if (!alertsCache.data) {
+      await refreshAlerts(); // cold start
+    } else if (now - alertsCache.at > ALERTS_TTL) {
+      refreshAlerts(); // stale: refresh in background, serve current immediately
     }
-
-    const data = await alertsRes.json();
-
-    // Filter for only the alert types we want to display
-    const alertTypes = [
-      'Tornado Watch',
-      'Tornado Warning',
-      'Severe Thunderstorm Watch',
-      'Severe Thunderstorm Warning',
-      'Flood Watch',
-      'Flood Warning'
-    ];
-
-    const filtered = {
-      type: 'FeatureCollection',
-      features: data.features.filter(f => {
-        const event = f.properties?.event;
-        return event && alertTypes.includes(event);
-      })
-    };
-
-    res.json(filtered);
+    res.json(alertsCache.data || { type: 'FeatureCollection', features: [], counts: {} });
   } catch (err) {
+    // If a build failed but we have older data, still serve it.
+    if (alertsCache.data) return res.json(alertsCache.data);
     res.status(502).json({ error: err.message });
   }
 });
@@ -267,4 +369,9 @@ app.listen(PORT, () => {
   console.log(`Weather dashboard on http://localhost:${PORT}`);
   startRealtime();  // live pushes -> cache, DB, and SSE
   startCollector(); // periodic REST backstop, in case realtime drops
+
+  // Warm the alerts cache in the background (resolves zone geometry once up front),
+  // then keep it warm so the map's Active Alerts always load instantly.
+  refreshAlerts().catch((err) => console.warn('[alerts] initial build failed:', err.message));
+  setInterval(() => refreshAlerts().catch(() => {}), ALERTS_TTL);
 });

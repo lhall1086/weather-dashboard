@@ -5,6 +5,61 @@ import 'dotenv/config';
 const { LAT, LON } = process.env;
 const USER_AGENT = 'local-weather-dashboard (contact: you@example.com)';
 
+// Map METAR cloud-cover codes to a short human label for popups.
+const COVER_LABELS = {
+  SKC: 'Clear', CLR: 'Clear', NCD: 'Clear', NSC: 'Clear',
+  FEW: 'Few clouds', SCT: 'Scattered clouds', BKN: 'Broken clouds', OVC: 'Overcast',
+};
+
+// Clean up the AWC station name ("Selma/Craig Fld, AL, US" -> "Selma/Craig Fld, AL").
+function cleanName(name, id) {
+  if (!name) return id;
+  return name.replace(/,?\s*US$/, '').trim();
+}
+
+// Live observations within a geographic bounding box, via NOAA's Aviation Weather
+// Center METAR API. This is the authoritative, nationwide source and — unlike a
+// fixed station list — returns every reporting station actually inside the view,
+// so temperatures appear at ALL zoom levels and regions, not just Alabama.
+// bbox order for the AWC API is: minLat, minLon, maxLat, maxLon.
+const boundsCache = new Map(); // key -> { at, data }
+const BOUNDS_TTL = 5 * 60 * 1000; // 5 min
+
+export async function fetchObservationsByBounds(minLat, minLon, maxLat, maxLon) {
+  // Round the key so small pans reuse the cache instead of refetching constantly.
+  const r = (n) => Math.round(n * 2) / 2;
+  const key = [r(minLat), r(minLon), r(maxLat), r(maxLon)].join(',');
+  const now = Date.now();
+  const hit = boundsCache.get(key);
+  if (hit && now - hit.at < BOUNDS_TTL) return hit.data;
+
+  const bbox = `${minLat},${minLon},${maxLat},${maxLon}`;
+  const url = `https://aviationweather.gov/api/data/metar?bbox=${bbox}&format=json`;
+  const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
+  if (!res.ok) throw new Error(`METAR bbox failed: ${res.status}`);
+
+  const rows = await res.json();
+  const stations = rows
+    .filter((s) => s.temp != null && s.lat != null && s.lon != null)
+    .map((s) => {
+      const cover = COVER_LABELS[s.cover] || (s.wxString || 'N/A');
+      return {
+        id: s.icaoId,
+        name: cleanName(s.name, s.icaoId),
+        lat: s.lat,
+        lon: s.lon,
+        temp: Math.round((s.temp * 9) / 5 + 32), // METAR temp is °C
+        conditions: cover,
+        timestamp: s.reportTime,
+      };
+    });
+
+  // Cap the cache size so it can't grow unbounded across many viewports.
+  if (boundsCache.size > 200) boundsCache.clear();
+  boundsCache.set(key, { at: now, data: stations });
+  return stations;
+}
+
 // Major towns/cities in Tallapoosa County + surrounding counties with known NWS stations.
 const STATIONS = [
   { id: 'KALX', name: 'Alexander City', lat: 32.9147, lon: -85.9630, county: 'Tallapoosa' },

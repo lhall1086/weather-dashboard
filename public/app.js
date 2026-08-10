@@ -547,42 +547,23 @@ function initMap() {
     }
   }, 120000); // every 2 minutes
 
-  // Load temperature stations (start with US-wide view)
-  loadTempStationsWide();
+  // Load temperature stations for the initial view.
+  loadTempsForView();
 
-  // Reload temps when zooming in/out
-  regionalMap.on('zoomend', () => {
-    const zoom = regionalMap.getZoom();
-
-    // Only reload if temps are enabled
+  // Reload temps whenever the view changes (zoom OR pan) — bounds-based, so
+  // stations appear at every zoom level and in every region that has data.
+  // moveend fires for both pan and zoom; debounce so rapid drags don't spam.
+  regionalMap.on('moveend', () => {
     if (!$('#toggle-temps').checked) return;
-
-    // Clear existing markers
-    tempMarkers.forEach((m) => regionalMap.removeLayer(m));
-    tempMarkers = [];
-
-    // Load appropriate station set based on zoom level
-    if (zoom >= 7) {
-      // Local view (zoomed in)
-      loadTempStations();
-    } else {
-      // Nationwide view (zoomed out)
-      loadTempStationsWide();
-    }
+    debouncedLoadTemps();
   });
 
   // Layer toggle handlers
   $('#toggle-temps').addEventListener('change', (e) => {
     if (e.target.checked) {
-      // Reload appropriate station set based on zoom
-      const zoom = regionalMap.getZoom();
-      if (zoom >= 7) {
-        loadTempStations();
-      } else {
-        loadTempStationsWide();
-      }
+      loadTempsForView();
     } else {
-      tempMarkers.forEach((m) => regionalMap.removeLayer(m));
+      clearTempMarkers();
     }
   });
 
@@ -606,72 +587,77 @@ function initMap() {
   });
 }
 
-async function loadTempStations() {
-  try {
-    // Clear existing temp markers
-    tempMarkers.forEach((m) => regionalMap.removeLayer(m));
+// Remove all temperature markers from the map.
+function clearTempMarkers() {
+  tempMarkers.forEach((m) => regionalMap.removeLayer(m));
+  tempMarkers = [];
+}
 
-    const res = await fetch('/api/observations');
+// Thin a dense station set so labels don't overlap: divide the view into a grid
+// and keep only one station per cell (roughly evenly spaced). Higher zoom = finer
+// grid = more stations shown. Keeps the closest-to-cell-center station.
+function declutterStations(stations, bounds) {
+  const GRID = 10; // ~10x10 cells across the viewport
+  const latSpan = bounds.getNorth() - bounds.getSouth();
+  const lonSpan = bounds.getEast() - bounds.getWest();
+  if (latSpan <= 0 || lonSpan <= 0) return stations;
+
+  const cellLat = latSpan / GRID;
+  const cellLon = lonSpan / GRID;
+  const chosen = new Map(); // cellKey -> station
+
+  for (const s of stations) {
+    const row = Math.floor((s.lat - bounds.getSouth()) / cellLat);
+    const col = Math.floor((s.lon - bounds.getWest()) / cellLon);
+    const key = `${row}:${col}`;
+    if (!chosen.has(key)) chosen.set(key, s);
+  }
+  return [...chosen.values()];
+}
+
+// Load temperatures for whatever is currently in view (bounds-based). Works at
+// every zoom level and region — not just Alabama — because it asks the server
+// for the stations inside the current map bounds.
+async function loadTempsForView() {
+  if (!$('#toggle-temps').checked) return;
+  try {
+    const b = regionalMap.getBounds();
+    const bbox = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()]
+      .map((n) => n.toFixed(4))
+      .join(',');
+
+    const res = await fetch(`/api/observations?bbox=${bbox}`);
     const { stations } = await res.json();
 
-    tempMarkers = stations
-      .filter((s) => s.temp != null)
-      .map((s) => {
-        // Text-only label (no colored circle background)
-        const label = L.marker([s.lat, s.lon], {
-          icon: L.divIcon({
-            className: 'temp-label-only',
-            html: `<div class="temp-text">${s.temp}°</div>`,
-            iconSize: [40, 20],
-          }),
-        });
+    clearTempMarkers();
+    if (!$('#toggle-temps').checked) return; // toggled off mid-fetch
 
-        label.bindPopup(`<b>${s.name}</b><br>${s.temp}°F<br>${s.conditions}`);
+    const visible = declutterStations(stations.filter((s) => s.temp != null), b);
 
-        // Only add if temps are toggled on
-        if ($('#toggle-temps').checked) {
-          label.addTo(regionalMap);
-        }
-
-        return label;
+    tempMarkers = visible.map((s) => {
+      const label = L.marker([s.lat, s.lon], {
+        icon: L.divIcon({
+          className: 'temp-label-only',
+          html: `<div class="temp-text">${s.temp}°</div>`,
+          iconSize: [40, 20],
+        }),
       });
+      label.bindPopup(`<b>${s.name}</b><br>${s.temp}°F<br>${s.conditions}`);
+      label.addTo(regionalMap);
+      return label;
+    });
+
+    console.log('[map] Loaded', tempMarkers.length, 'of', stations.length, 'in-view temp stations');
   } catch (err) {
     console.warn('[map] temp stations failed:', err.message);
   }
 }
 
-async function loadTempStationsWide() {
-  try {
-    // Clear existing temp markers
-    tempMarkers.forEach((m) => regionalMap.removeLayer(m));
-
-    const res = await fetch('/api/observations?nationwide=true');
-    const { stations } = await res.json();
-
-    tempMarkers = stations
-      .filter((s) => s.temp != null)
-      .map((s) => {
-        const label = L.marker([s.lat, s.lon], {
-          icon: L.divIcon({
-            className: 'temp-label-only',
-            html: `<div class="temp-text">${s.temp}°</div>`,
-            iconSize: [40, 20],
-          }),
-        });
-
-        label.bindPopup(`<b>${s.name}</b><br>${s.temp}°F<br>${s.conditions}`);
-
-        if ($('#toggle-temps').checked) {
-          label.addTo(regionalMap);
-        }
-
-        return label;
-      });
-
-    console.log('[map] Loaded', tempMarkers.length, 'US-wide temp stations');
-  } catch (err) {
-    console.warn('[map] wide temp stations failed:', err.message);
-  }
+// Debounce so a rapid pan/zoom drag issues one request when it settles.
+let tempLoadTimer = null;
+function debouncedLoadTemps() {
+  clearTimeout(tempLoadTimer);
+  tempLoadTimer = setTimeout(loadTempsForView, 400);
 }
 
 // Load active alerts from NWS GeoJSON
@@ -736,7 +722,7 @@ async function loadActiveAlerts() {
       }
     }).addTo(alertsLayer);
 
-    console.log('[map] Loaded', geojson.features.length, 'active alerts');
+    console.log('[map] Loaded', geojson.features.length, 'active alerts', geojson.counts || '');
   } catch (err) {
     console.warn('[map] active alerts failed:', err.message);
   }
