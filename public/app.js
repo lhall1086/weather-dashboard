@@ -1,6 +1,8 @@
 // Dashboard client. Talks only to our own /api/* endpoints (never AWN directly).
 
 const REFRESH_MS = 60 * 1000; // re-pull current conditions every minute
+const STALE_MS = 90 * 1000;   // if no live push arrives in 90s, poll as a backstop
+let lastCurrentAt = 0;         // timestamp of the most recent applied reading
 let charts = {}; // keyed by canvas id
 let currentRange = '24h';
 
@@ -31,6 +33,7 @@ const TILE_DEFS = [
 // Apply one reading to the UI (shared by the SSE stream and the polling fallback).
 function applyCurrent(source, data, error) {
   if (!data) return;
+  lastCurrentAt = Date.now(); // mark that fresh data just landed
   renderTiles(data);
   renderWind(data);
   $('#updated').textContent = data.dateutc
@@ -84,6 +87,22 @@ function clearFallback() {
     pollFallback = null;
   }
 }
+
+// Staleness watchdog: the SSE connection can stay open while the upstream feed
+// silently stalls (no error fires), leaving the page frozen. If no reading has
+// arrived within STALE_MS, pull once over REST so the tiles stay current.
+function startStaleWatchdog() {
+  setInterval(() => {
+    if (document.hidden) return; // don't poll a backgrounded tab
+    if (Date.now() - lastCurrentAt > STALE_MS) loadCurrent();
+  }, 30 * 1000);
+}
+
+// When the user returns to the tab, refresh immediately if data looks stale
+// (browsers throttle timers in background tabs, so the watchdog may be behind).
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && Date.now() - lastCurrentAt > STALE_MS) loadCurrent();
+});
 
 function renderTiles(d) {
   const tiles = $('#tiles');
@@ -857,6 +876,7 @@ async function loadMonthlyCharts() {
 // ---- boot ----
 initMap();           // initialize regional map with layers
 startStream();       // live current conditions via SSE (falls back to polling on error)
+startStaleWatchdog(); // backstop: force a REST pull if the live stream silently stalls
 loadBriefing();
 loadSPCOutlook();
 load7Day();
