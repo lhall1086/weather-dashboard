@@ -172,10 +172,14 @@ async function loadSPCOutlook() {
 
     const renderDay = (day, label, dayNum) => {
       const url = `https://www.spc.noaa.gov/products/outlook/day${dayNum}otlk.html`;
-      if (!day) {
-        return `<a href="${url}" target="_blank" rel="noopener" class="spc-day none"><div class="day-label">${label}</div><div class="risk-label">No risk</div></a>`;
-      }
-      return `<a href="${url}" target="_blank" rel="noopener" class="spc-day ${day.code}"><div class="day-label">${label}</div><div class="risk-label">${day.label}</div></a>`;
+      const risk = day ? day.label : 'No risk';
+      const code = day ? day.code : 'none';
+      const title = `Open the official SPC Day ${dayNum} Convective Outlook`;
+      return `<a href="${url}" target="_blank" rel="noopener" class="spc-day ${code}" title="${title}">
+        <div class="day-label">${label}</div>
+        <div class="risk-label">${risk}</div>
+        <div class="spc-link-hint">View full outlook ↗</div>
+      </a>`;
     };
 
     $('#spc-timeline').innerHTML = renderDay(day1, 'Day 1', 1) + renderDay(day2, 'Day 2', 2) + renderDay(day3, 'Day 3', 3);

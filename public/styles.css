@@ -123,7 +123,9 @@ body {
 .spc-day.HIGH:hover { background: rgba(156, 39, 176, 0.1); }
 .spc-day .day-label { font-size: 0.8rem; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.05em; }
 .spc-day .risk-label { font-size: 1.05rem; font-weight: 600; margin-top: 0.4rem; color: var(--ink); }
-.spc-day.none { border-color: var(--line); opacity: 0.6; }
+.spc-day .spc-link-hint { font-size: 0.72rem; color: var(--accent, #4ea8de); margin-top: 0.5rem; opacity: 0.75; transition: opacity 0.2s; }
+.spc-day:hover .spc-link-hint { opacity: 1; text-decoration: underline; }
+.spc-day.none { border-color: var(--line); opacity: 0.7; }
 .spc-day.none:hover { background: var(--card); opacity: 1; }
 
 /* Alerts banner */
