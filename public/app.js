@@ -782,44 +782,87 @@ async function loadYoYAnalytics() {
 async function loadMonthlyCharts() {
   try {
     const res = await fetch('/api/analytics/monthly');
-    const { type, current, previous, currentLabel, previousLabel } = await res.json();
+    const resp = await res.json();
+    const { type } = resp;
 
-    // Fallbacks in case an older server response lacks the labels.
-    const curLabel = currentLabel || (type === 'year' ? 'This Year' : 'Recent 30 Days');
-    const prevLabel = previousLabel || (type === 'year' ? 'Last Year' : 'Prior 30 Days');
+    let labels, tempDatasets, rainDatasets;
 
-    let labels;
-    if (type === 'year') {
-      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      labels = current.map((d) => monthNames[d.month]);
+    if (type === 'trailing') {
+      // Continuous trailing 12-month trend — a single series per chart.
+      const series = resp.series || [];
+      labels = series.map((d) => d.label);
+      tempDatasets = [
+        {
+          label: 'Avg Temp',
+          data: series.map((d) => d.avgTemp),
+          borderColor: '#4ea8de',
+          backgroundColor: 'rgba(78, 168, 222, 0.1)',
+          fill: true,
+          tension: 0.3,
+          spanGaps: true,
+        },
+      ];
+      rainDatasets = [
+        {
+          label: 'Total Rain',
+          data: series.map((d) => d.totalRain),
+          backgroundColor: '#5b8def',
+        },
+      ];
     } else {
-      labels = current.map((d, i) => `Week ${i + 1}`);
+      // Dual-series modes: year-over-year (monthly) or month-over-month (weekly).
+      const { current, previous, currentLabel, previousLabel } = resp;
+      const curLabel = currentLabel || (type === 'year' ? 'This Year' : 'Recent 30 Days');
+      const prevLabel = previousLabel || (type === 'year' ? 'Last Year' : 'Prior 30 Days');
+
+      if (type === 'year') {
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        labels = current.map((d) => monthNames[d.month]);
+      } else {
+        labels = current.map((d, i) => `Week ${i + 1}`);
+      }
+
+      tempDatasets = [
+        {
+          label: curLabel,
+          data: current.map((d) => d.avgTemp),
+          borderColor: '#4ea8de',
+          backgroundColor: 'rgba(78, 168, 222, 0.1)',
+          fill: true,
+          tension: 0.3,
+        },
+        {
+          label: prevLabel,
+          data: previous.map((d) => d.avgTemp),
+          borderColor: '#9aa7bd',
+          backgroundColor: 'rgba(154, 167, 189, 0.1)',
+          fill: true,
+          tension: 0.3,
+          borderDash: [5, 5],
+        },
+      ];
+      rainDatasets = [
+        {
+          label: curLabel,
+          data: current.map((d) => d.totalRain),
+          backgroundColor: '#5b8def',
+        },
+        {
+          label: prevLabel,
+          data: previous.map((d) => d.totalRain),
+          backgroundColor: '#9aa7bd',
+        },
+      ];
     }
 
-    // Temperature chart — reuse the instance if it already exists (re-runnable on a timer).
-    const tempDatasets = [
-      {
-        label: curLabel,
-        data: current.map((d) => d.avgTemp),
-        borderColor: '#4ea8de',
-        backgroundColor: 'rgba(78, 168, 222, 0.1)',
-        fill: true,
-        tension: 0.3,
-      },
-      {
-        label: prevLabel,
-        data: previous.map((d) => d.avgTemp),
-        borderColor: '#9aa7bd',
-        backgroundColor: 'rgba(154, 167, 189, 0.1)',
-        fill: true,
-        tension: 0.3,
-        borderDash: [5, 5],
-      },
-    ];
+    // Chart titles reflect the active mode.
+    const tempTitle = type === 'trailing' ? 'Avg Temperature — Trailing 12 Months (°F)' : 'Avg Temperature (°F)';
+    const rainTitle = type === 'trailing' ? 'Rainfall — Trailing 12 Months (in)' : 'Rainfall (inches)';
 
     if (charts.yoyTempChart) {
       charts.yoyTempChart.data.labels = labels;
       charts.yoyTempChart.data.datasets = tempDatasets;
+      charts.yoyTempChart.options.plugins.title.text = tempTitle;
       charts.yoyTempChart.update();
     } else {
       charts.yoyTempChart = new Chart(document.getElementById('yoyTempChart'), {
@@ -829,7 +872,7 @@ async function loadMonthlyCharts() {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            title: { display: true, text: 'Avg Temperature (°F)', color: '#9aa7bd' },
+            title: { display: true, text: tempTitle, color: '#9aa7bd' },
             legend: { labels: { color: '#9aa7bd' } },
           },
           scales: {
@@ -841,22 +884,10 @@ async function loadMonthlyCharts() {
     }
 
     // Rain chart — same reuse pattern.
-    const rainDatasets = [
-      {
-        label: curLabel,
-        data: current.map((d) => d.totalRain),
-        backgroundColor: '#5b8def',
-      },
-      {
-        label: prevLabel,
-        data: previous.map((d) => d.totalRain),
-        backgroundColor: '#9aa7bd',
-      },
-    ];
-
     if (charts.yoyRainChart) {
       charts.yoyRainChart.data.labels = labels;
       charts.yoyRainChart.data.datasets = rainDatasets;
+      charts.yoyRainChart.options.plugins.title.text = rainTitle;
       charts.yoyRainChart.update();
     } else {
       charts.yoyRainChart = new Chart(document.getElementById('yoyRainChart'), {
@@ -866,7 +897,7 @@ async function loadMonthlyCharts() {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            title: { display: true, text: 'Rainfall (inches)', color: '#9aa7bd' },
+            title: { display: true, text: rainTitle, color: '#9aa7bd' },
             legend: { labels: { color: '#9aa7bd' } },
           },
           scales: {

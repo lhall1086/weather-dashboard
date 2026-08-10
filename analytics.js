@@ -2,18 +2,24 @@
 // Supports both year-over-year (if data available) and month-over-month.
 import { db } from './db.js';
 
-// Get date ranges for comparison. Falls back to month-over-month if no year data.
+// Decide how to compare, based on how much history we actually have:
+//   'month'    (< ~11 months): Recent 30 Days vs Prior 30 Days.
+//   'trailing' (~11–23 months): KPI summary still Recent-vs-Prior 30 Days, but the
+//              chart shows a continuous trailing 12-month trend (calendar year-over-
+//              year would be mostly empty until two full years exist).
+//   'year'     (>= ~23 months): true calendar year-over-year (each month has a pair).
 function getComparisonRanges() {
   const now = Date.now();
   const thirtyDaysAgo = now - 30 * 86400e3;
   const sixtyDaysAgo = now - 60 * 86400e3;
 
-  // Check if we have data from last year
   const oldestRecord = db.prepare('SELECT MIN(dateutc) as oldest FROM readings').get();
-  const hasYearData = oldestRecord?.oldest && (now - oldestRecord.oldest) >= 335 * 86400e3; // ~11 months
+  const spanMs = oldestRecord?.oldest ? now - oldestRecord.oldest : 0;
+  const hasTwoYears = spanMs >= 700 * 86400e3;  // ~23 months → most months have a prior-year pair
+  const hasYearish = spanMs >= 335 * 86400e3;   // ~11 months
 
-  if (hasYearData) {
-    // Year-over-year comparison
+  if (hasTwoYears) {
+    // True year-over-year comparison.
     const thisYearStart = new Date(new Date().getFullYear(), 0, 1).getTime();
     const lastYearStart = new Date(new Date().getFullYear() - 1, 0, 1).getTime();
     const lastYearEnd = new Date(new Date().getFullYear() - 1, 11, 31, 23, 59, 59).getTime();
@@ -23,15 +29,15 @@ function getComparisonRanges() {
       current: { start: thisYearStart, end: now, label: 'This Year', shortLabel: 'This Year' },
       previous: { start: lastYearStart, end: lastYearEnd, label: 'Last Year', shortLabel: 'Last Year' },
     };
-  } else {
-    // Month-over-month comparison. "Recent" = the most recent 30 days (days 0–30);
-    // "Prior" = the 30 days before that (days 31–60), used as the baseline to compare against.
-    return {
-      type: 'month',
-      current: { start: thirtyDaysAgo, end: now, label: 'Recent 30 Days', shortLabel: 'Recent 30 Days' },
-      previous: { start: sixtyDaysAgo, end: thirtyDaysAgo, label: 'Prior 30 Days (31–60 days ago)', shortLabel: 'Prior 30 Days' },
-    };
   }
+
+  // For both 'month' and 'trailing', the KPI summary compares the always-populated
+  // Recent 30 Days vs Prior 30 Days. Only the chart differs (see getMonthlyComparison).
+  return {
+    type: hasYearish ? 'trailing' : 'month',
+    current: { start: thirtyDaysAgo, end: now, label: 'Recent 30 Days', shortLabel: 'Recent 30 Days' },
+    previous: { start: sixtyDaysAgo, end: thirtyDaysAgo, label: 'Prior 30 Days (31–60 days ago)', shortLabel: 'Prior 30 Days' },
+  };
 }
 
 // Aggregate KPIs for a date range.
@@ -111,6 +117,30 @@ export function getYoYComparison() {
 // Time-series comparison for charting (adapts based on available data).
 export function getMonthlyComparison() {
   const ranges = getComparisonRanges();
+
+  if (ranges.type === 'trailing') {
+    // Continuous trailing 12-month trend — one point per calendar month, oldest to
+    // newest. A single series (no year-over-year overlay) so every month you have
+    // data for is shown, with no empty "last year" gaps.
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const now = new Date();
+    const series = [];
+
+    for (let back = 11; back >= 0; back--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - back, 1);
+      const start = d.getTime();
+      const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59).getTime();
+      const kpis = aggregateKPIs(start, Math.min(end, Date.now()));
+
+      series.push({
+        label: `${monthNames[d.getMonth()]} '${String(d.getFullYear()).slice(2)}`,
+        avgTemp: kpis?.recordCount ? kpis.avgTemp : null,
+        totalRain: kpis?.recordCount ? kpis.totalRain : null,
+      });
+    }
+
+    return { type: 'trailing', series };
+  }
 
   if (ranges.type === 'year') {
     // Year-over-year monthly breakdown
