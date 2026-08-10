@@ -20,15 +20,16 @@ function getComparisonRanges() {
 
     return {
       type: 'year',
-      current: { start: thisYearStart, end: now, label: 'This Year' },
-      previous: { start: lastYearStart, end: lastYearEnd, label: 'Last Year' },
+      current: { start: thisYearStart, end: now, label: 'This Year', shortLabel: 'This Year' },
+      previous: { start: lastYearStart, end: lastYearEnd, label: 'Last Year', shortLabel: 'Last Year' },
     };
   } else {
-    // Month-over-month comparison (last 30 days vs previous 30 days)
+    // Month-over-month comparison. "Recent" = the most recent 30 days (days 0–30);
+    // "Prior" = the 30 days before that (days 31–60), used as the baseline to compare against.
     return {
       type: 'month',
-      current: { start: thirtyDaysAgo, end: now, label: 'Last 30 Days' },
-      previous: { start: sixtyDaysAgo, end: thirtyDaysAgo, label: 'Previous 30 Days' },
+      current: { start: thirtyDaysAgo, end: now, label: 'Recent 30 Days', shortLabel: 'Recent 30 Days' },
+      previous: { start: sixtyDaysAgo, end: thirtyDaysAgo, label: 'Prior 30 Days (31–60 days ago)', shortLabel: 'Prior 30 Days' },
     };
   }
 }
@@ -92,6 +93,8 @@ export function getYoYComparison() {
     comparisonType: ranges.type,
     currentLabel: ranges.current.label,
     previousLabel: ranges.previous.label,
+    currentShortLabel: ranges.current.shortLabel,
+    previousShortLabel: ranges.previous.shortLabel,
     avgTemp: compare(current.avgTemp, previous.avgTemp),
     maxTemp: compare(current.maxTemp, previous.maxTemp),
     minTemp: compare(current.minTemp, previous.minTemp),
@@ -129,7 +132,13 @@ export function getMonthlyComparison() {
       lastYearData.push({ month, avgTemp: lastMonth?.avgTemp, totalRain: lastMonth?.totalRain });
     }
 
-    return { type: 'year', current: thisYearData, previous: lastYearData };
+    return {
+      type: 'year',
+      current: thisYearData,
+      previous: lastYearData,
+      currentLabel: ranges.current.shortLabel,
+      previousLabel: ranges.previous.shortLabel,
+    };
   } else {
     // Month-over-month: break each 30-day period into weekly buckets
     const currentData = [];
@@ -148,6 +157,12 @@ export function getMonthlyComparison() {
       previousData.push({ week, avgTemp: prevWeek?.avgTemp, totalRain: prevWeek?.totalRain });
     }
 
-    return { type: 'month', current: currentData, previous: previousData };
+    return {
+      type: 'month',
+      current: currentData,
+      previous: previousData,
+      currentLabel: ranges.current.shortLabel,
+      previousLabel: ranges.previous.shortLabel,
+    };
   }
 }

@@ -762,8 +762,12 @@ async function loadYoYAnalytics() {
       { label: 'Max Gust', key: 'maxGust', unit: 'mph', digits: 1 },
     ];
 
-    const typeLabel = data.comparisonType === 'year' ? '(Year-over-Year)' : '(Month-over-Month)';
-    $('#yoy-summary').innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--ink-dim); font-size: 0.85rem; margin-bottom: 0.5rem;">${typeLabel}</div>` + kpis
+    const curLabel = data.currentShortLabel || data.currentLabel || 'Recent';
+    const prevLabel = data.previousShortLabel || data.previousLabel || 'Prior';
+    const heading = data.comparisonType === 'year'
+      ? `Comparing <strong>${curLabel}</strong> against <strong>${data.previousLabel}</strong>`
+      : `Comparing the <strong>${curLabel}</strong> against the <strong>${data.previousLabel}</strong>`;
+    $('#yoy-summary').innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--ink-dim); font-size: 0.85rem; margin-bottom: 0.5rem;">${heading}</div>` + kpis
       .map((kpi) => {
         const val = data[kpi.key];
         if (!val) return '';
@@ -773,8 +777,8 @@ async function loadYoYAnalytics() {
         <div class="yoy-kpi">
           <div class="kpi-label">${kpi.label}</div>
           <div class="kpi-values">
-            <div class="kpi-this">${fmt(val.current, kpi.digits)}${kpi.unit}</div>
-            <div class="kpi-last">${data.previousLabel}: ${fmt(val.previous, kpi.digits)}${kpi.unit}</div>
+            <div class="kpi-this">${curLabel}: ${fmt(val.current, kpi.digits)}${kpi.unit}</div>
+            <div class="kpi-last">${prevLabel}: ${fmt(val.previous, kpi.digits)}${kpi.unit}</div>
           </div>
           <div class="kpi-delta ${deltaClass}">${arrow} ${val.pctChange > 0 ? '+' : ''}${val.pctChange}%</div>
         </div>`;
@@ -788,7 +792,11 @@ async function loadYoYAnalytics() {
 async function loadMonthlyCharts() {
   try {
     const res = await fetch('/api/analytics/monthly');
-    const { type, current, previous } = await res.json();
+    const { type, current, previous, currentLabel, previousLabel } = await res.json();
+
+    // Fallbacks in case an older server response lacks the labels.
+    const curLabel = currentLabel || (type === 'year' ? 'This Year' : 'Recent 30 Days');
+    const prevLabel = previousLabel || (type === 'year' ? 'Last Year' : 'Prior 30 Days');
 
     let labels;
     if (type === 'year') {
@@ -798,76 +806,86 @@ async function loadMonthlyCharts() {
       labels = current.map((d, i) => `Week ${i + 1}`);
     }
 
-    // Temperature chart
-    new Chart(document.getElementById('yoyTempChart'), {
-      type: 'line',
-      data: {
-        labels,
-        datasets: [
-          {
-            label: type === 'year' ? 'This Year' : 'Last 30 Days',
-            data: current.map((d) => d.avgTemp),
-            borderColor: '#4ea8de',
-            backgroundColor: 'rgba(78, 168, 222, 0.1)',
-            fill: true,
-            tension: 0.3,
-          },
-          {
-            label: type === 'year' ? 'Last Year' : 'Previous 30 Days',
-            data: previous.map((d) => d.avgTemp),
-            borderColor: '#9aa7bd',
-            backgroundColor: 'rgba(154, 167, 189, 0.1)',
-            fill: true,
-            tension: 0.3,
-            borderDash: [5, 5],
-          },
-        ],
+    // Temperature chart — reuse the instance if it already exists (re-runnable on a timer).
+    const tempDatasets = [
+      {
+        label: curLabel,
+        data: current.map((d) => d.avgTemp),
+        borderColor: '#4ea8de',
+        backgroundColor: 'rgba(78, 168, 222, 0.1)',
+        fill: true,
+        tension: 0.3,
       },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          title: { display: true, text: 'Avg Temperature by Month (°F)', color: '#9aa7bd' },
-          legend: { labels: { color: '#9aa7bd' } },
-        },
-        scales: {
-          y: { ticks: { color: '#9aa7bd' }, grid: { color: '#2c3648' } },
-          x: { ticks: { color: '#9aa7bd' }, grid: { color: '#2c3648' } },
-        },
+      {
+        label: prevLabel,
+        data: previous.map((d) => d.avgTemp),
+        borderColor: '#9aa7bd',
+        backgroundColor: 'rgba(154, 167, 189, 0.1)',
+        fill: true,
+        tension: 0.3,
+        borderDash: [5, 5],
       },
-    });
+    ];
 
-    // Rain chart
-    new Chart(document.getElementById('yoyRainChart'), {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [
-          {
-            label: type === 'year' ? 'This Year' : 'Last 30 Days',
-            data: current.map((d) => d.totalRain),
-            backgroundColor: '#5b8def',
+    if (charts.yoyTempChart) {
+      charts.yoyTempChart.data.labels = labels;
+      charts.yoyTempChart.data.datasets = tempDatasets;
+      charts.yoyTempChart.update();
+    } else {
+      charts.yoyTempChart = new Chart(document.getElementById('yoyTempChart'), {
+        type: 'line',
+        data: { labels, datasets: tempDatasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: { display: true, text: 'Avg Temperature (°F)', color: '#9aa7bd' },
+            legend: { labels: { color: '#9aa7bd' } },
           },
-          {
-            label: type === 'year' ? 'Last Year' : 'Previous 30 Days',
-            data: previous.map((d) => d.totalRain),
-            backgroundColor: '#9aa7bd',
+          scales: {
+            y: { ticks: { color: '#9aa7bd' }, grid: { color: '#2c3648' } },
+            x: { ticks: { color: '#9aa7bd' }, grid: { color: '#2c3648' } },
           },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          title: { display: true, text: 'Monthly Rainfall (inches)', color: '#9aa7bd' },
-          legend: { labels: { color: '#9aa7bd' } },
         },
-        scales: {
-          y: { ticks: { color: '#9aa7bd' }, grid: { color: '#2c3648' } },
-          x: { ticks: { color: '#9aa7bd' }, grid: { color: '#2c3648' } },
-        },
+      });
+    }
+
+    // Rain chart — same reuse pattern.
+    const rainDatasets = [
+      {
+        label: curLabel,
+        data: current.map((d) => d.totalRain),
+        backgroundColor: '#5b8def',
       },
-    });
+      {
+        label: prevLabel,
+        data: previous.map((d) => d.totalRain),
+        backgroundColor: '#9aa7bd',
+      },
+    ];
+
+    if (charts.yoyRainChart) {
+      charts.yoyRainChart.data.labels = labels;
+      charts.yoyRainChart.data.datasets = rainDatasets;
+      charts.yoyRainChart.update();
+    } else {
+      charts.yoyRainChart = new Chart(document.getElementById('yoyRainChart'), {
+        type: 'bar',
+        data: { labels, datasets: rainDatasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: { display: true, text: 'Rainfall (inches)', color: '#9aa7bd' },
+            legend: { labels: { color: '#9aa7bd' } },
+          },
+          scales: {
+            y: { ticks: { color: '#9aa7bd' }, grid: { color: '#2c3648' } },
+            x: { ticks: { color: '#9aa7bd' }, grid: { color: '#2c3648' } },
+          },
+        },
+      });
+    }
   } catch (err) {
     console.warn('[yoy charts]', err.message);
   }
@@ -897,3 +915,12 @@ setInterval(loadPrecip, REFRESH_MS);        // precip analysis refreshes with ne
 setInterval(loadHourly, 60 * 60 * 1000);    // hourly forecast refresh every hour
 setInterval(loadTendency, REFRESH_MS);      // tendency refreshes with new station data
 setInterval(() => loadHistory(currentRange), REFRESH_MS * 5);
+setInterval(loadYoYAnalytics, REFRESH_MS * 5);  // historical KPIs refresh every 5 min
+setInterval(loadMonthlyCharts, REFRESH_MS * 5); // historical charts refresh every 5 min
+
+// Refresh the historical analytics the moment the user returns to the tab.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  loadYoYAnalytics();
+  loadMonthlyCharts();
+});
