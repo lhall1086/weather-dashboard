@@ -733,52 +733,6 @@ async function loadActiveAlerts() {
 }
 
 // ---- year-over-year analytics ----
-async function loadYoYAnalytics() {
-  try {
-    const res = await fetch('/api/analytics/yoy');
-    const data = await res.json();
-
-    if (!data.available) {
-      $('#yoy-summary').innerHTML = '<div class="yoy-kpi"><div class="kpi-label">Insufficient Data</div><div class="kpi-values">Run backfill to import historical data</div></div>';
-      return;
-    }
-
-    const kpis = [
-      { label: 'Avg Temp', key: 'avgTemp', unit: '°F', digits: 1 },
-      { label: 'Max Temp', key: 'maxTemp', unit: '°F', digits: 1 },
-      { label: 'Min Temp', key: 'minTemp', unit: '°F', digits: 1 },
-      { label: 'Total Rain', key: 'totalRain', unit: 'in', digits: 2 },
-      { label: 'Avg Wind', key: 'avgWind', unit: 'mph', digits: 1 },
-      { label: 'Max Gust', key: 'maxGust', unit: 'mph', digits: 1 },
-    ];
-
-    const curLabel = data.currentShortLabel || data.currentLabel || 'Recent';
-    const prevLabel = data.previousShortLabel || data.previousLabel || 'Prior';
-    const heading = data.comparisonType === 'year'
-      ? `Comparing <strong>${curLabel}</strong> against <strong>${data.previousLabel}</strong>`
-      : `Comparing the <strong>${curLabel}</strong> against the <strong>${data.previousLabel}</strong>`;
-    $('#yoy-summary').innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--ink-dim); font-size: 0.85rem; margin-bottom: 0.5rem;">${heading}</div>` + kpis
-      .map((kpi) => {
-        const val = data[kpi.key];
-        if (!val) return '';
-        const deltaClass = val.delta > 0 ? 'positive' : val.delta < 0 ? 'negative' : '';
-        const arrow = val.delta > 0 ? '↑' : val.delta < 0 ? '↓' : '→';
-        return `
-        <div class="yoy-kpi">
-          <div class="kpi-label">${kpi.label}</div>
-          <div class="kpi-values">
-            <div class="kpi-this">${curLabel}: ${fmt(val.current, kpi.digits)}${kpi.unit}</div>
-            <div class="kpi-last">${prevLabel}: ${fmt(val.previous, kpi.digits)}${kpi.unit}</div>
-          </div>
-          <div class="kpi-delta ${deltaClass}">${arrow} ${val.pctChange > 0 ? '+' : ''}${val.pctChange}%</div>
-        </div>`;
-      })
-      .join('');
-  } catch (err) {
-    $('#yoy-summary').innerHTML = `<div class="yoy-kpi"><div class="kpi-label">Error</div><div class="kpi-values">${err.message}</div></div>`;
-  }
-}
-
 async function loadMonthlyCharts() {
   try {
     const res = await fetch('/api/analytics/monthly');
@@ -980,7 +934,6 @@ loadIndices();
 loadPrecip();
 loadAstronomy();
 loadAQI();
-loadYoYAnalytics();
 loadMonthlyCharts();
 loadHourly();
 loadTendency();
@@ -996,12 +949,10 @@ setInterval(loadTendency, REFRESH_MS);      // tendency refreshes with new stati
 setInterval(() => loadHistory(currentRange), REFRESH_MS * 5);
 setInterval(loadAstronomy, 60 * 60 * 1000); // sun/moon times refresh hourly (changes slowly)
 setInterval(loadAQI, 60 * 60 * 1000);       // AQI refreshes hourly
-setInterval(loadYoYAnalytics, REFRESH_MS * 5);  // historical KPIs refresh every 5 min
 setInterval(loadMonthlyCharts, REFRESH_MS * 5); // historical charts refresh every 5 min
 
-// Refresh the historical analytics the moment the user returns to the tab.
+// Refresh the charts the moment the user returns to the tab.
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) return;
-  loadYoYAnalytics();
   loadMonthlyCharts();
 });
