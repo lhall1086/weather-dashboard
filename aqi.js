@@ -75,6 +75,7 @@ export async function fetchAQI() {
     }
 
     const result = {
+      available: true,
       aqi: aqi,
       category: level.label,
       pollutant: dominantPollutant,
