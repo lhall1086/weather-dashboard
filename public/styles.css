@@ -252,6 +252,52 @@ body {
 .index-tile.cold { border-left: 3px solid var(--cool); }
 .index-tile.moisture { border-left: 3px solid var(--rain); }
 
+/* Astronomy & Air Quality */
+.astronomy-section { padding: 0.75rem 1.25rem; }
+.astro-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+.astro-tile {
+  background: var(--card-2);
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  padding: 1rem;
+  text-align: center;
+}
+.astro-tile .astro-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+}
+.astro-tile .astro-label {
+  font-size: 0.85rem;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.75rem;
+}
+.astro-tile .astro-times {
+  font-size: 0.9rem;
+  color: var(--ink);
+  line-height: 1.6;
+}
+.astro-tile .astro-times strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+.aqi-tile[style*="display: none"] {
+  display: none !important;
+}
+.aqi-badge {
+  display: inline-block;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+}
+
 /* Regional map */
 .map-section { padding: 0.75rem 1.25rem; }
 .map-controls {

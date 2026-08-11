@@ -14,6 +14,8 @@ import { getYoYComparison, getMonthlyComparison } from './analytics.js';
 import { getHistory, getLatest, insertReading, getPressureTendency } from './db.js';
 import { startCollector } from './collector.js';
 import { startRealtime, realtime } from './awn-realtime.js';
+import { getAstronomyData } from './astronomy.js';
+import { fetchAQI } from './aqi.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -128,6 +130,28 @@ app.get('/api/precip', (req, res) => {
     res.json({ stormTotal, recent, hourlyIntensity });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Astronomy: sunrise/sunset, moon phase, moonrise/moonset.
+// Times returned as epoch ms (UTC) — frontend converts to local display.
+app.get('/api/astronomy', (req, res) => {
+  try {
+    const date = req.query.date ? new Date(req.query.date) : new Date();
+    res.json(getAstronomyData(date));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Air Quality Index (AQI) from EPA AirNow. Requires AIRNOW_API_KEY in .env.
+// Returns null if key is missing or API fails (graceful degradation).
+app.get('/api/aqi', async (req, res) => {
+  try {
+    const aqi = await fetchAQI();
+    res.json(aqi || { available: false });
+  } catch (err) {
+    res.status(500).json({ error: err.message, available: false });
   }
 });
 

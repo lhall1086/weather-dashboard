@@ -912,6 +912,61 @@ async function loadMonthlyCharts() {
   }
 }
 
+// ---- astronomy & air quality ----
+async function loadAstronomy() {
+  try {
+    const res = await fetch('/api/astronomy');
+    const data = await res.json();
+
+    // Sun times
+    const sunrise = new Date(data.sun.sunrise).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const sunset = new Date(data.sun.sunset).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const goldenHour = new Date(data.sun.goldenHour).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    $('#sun-times').innerHTML = `
+      <div><strong>↑</strong> ${sunrise} · <strong>↓</strong> ${sunset}</div>
+      <div style="font-size: 0.75rem; color: var(--ink-dim); margin-top: 0.3rem;">Golden hour: ${goldenHour}</div>
+    `;
+
+    // Moon phase & times
+    $('#moon-icon').textContent = data.moon.phaseEmoji;
+    $('#moon-label').textContent = data.moon.phaseName;
+    const moonrise = data.moon.moonrise ? new Date(data.moon.moonrise).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'no rise';
+    const moonset = data.moon.moonset ? new Date(data.moon.moonset).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'no set';
+    const illum = (data.moon.illumination * 100).toFixed(0);
+    $('#moon-times').innerHTML = `
+      <div><strong>↑</strong> ${moonrise} · <strong>↓</strong> ${moonset}</div>
+      <div style="font-size: 0.75rem; color: var(--ink-dim); margin-top: 0.3rem;">${illum}% illuminated</div>
+    `;
+  } catch (err) {
+    console.warn('[astronomy]', err.message);
+  }
+}
+
+async function loadAQI() {
+  try {
+    const res = await fetch('/api/aqi');
+    const data = await res.json();
+
+    if (!data.available || !data.aqi) {
+      $('#aqi-tile').style.display = 'none';
+      return;
+    }
+
+    $('#aqi-tile').style.display = 'block';
+    $('#aqi-content').innerHTML = `
+      <div class="aqi-badge" style="background: ${data.color}; color: ${data.textColor};">
+        AQI ${data.aqi} · ${data.level}
+      </div>
+      <div style="font-size: 0.75rem; color: var(--ink-dim); margin-top: 0.5rem;">
+        Primary: ${data.pollutant}
+      </div>
+    `;
+  } catch (err) {
+    console.warn('[aqi]', err.message);
+    $('#aqi-tile').style.display = 'none';
+  }
+}
+
 // ---- boot ----
 initMap();           // initialize regional map with layers
 startStream();       // live current conditions via SSE (falls back to polling on error)
@@ -922,6 +977,8 @@ load7Day();
 loadAlerts();
 loadIndices();
 loadPrecip();
+loadAstronomy();
+loadAQI();
 loadYoYAnalytics();
 loadMonthlyCharts();
 loadHourly();
@@ -936,6 +993,8 @@ setInterval(loadPrecip, REFRESH_MS);        // precip analysis refreshes with ne
 setInterval(loadHourly, 60 * 60 * 1000);    // hourly forecast refresh every hour
 setInterval(loadTendency, REFRESH_MS);      // tendency refreshes with new station data
 setInterval(() => loadHistory(currentRange), REFRESH_MS * 5);
+setInterval(loadAstronomy, 60 * 60 * 1000); // sun/moon times refresh hourly (changes slowly)
+setInterval(loadAQI, 60 * 60 * 1000);       // AQI refreshes hourly
 setInterval(loadYoYAnalytics, REFRESH_MS * 5);  // historical KPIs refresh every 5 min
 setInterval(loadMonthlyCharts, REFRESH_MS * 5); // historical charts refresh every 5 min
 
