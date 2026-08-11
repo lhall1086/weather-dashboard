@@ -26,19 +26,23 @@ async function startup() {
 
   // Run backfill in background if needed (doesn't block server)
   if (needsBackfill) {
-    console.log('[startup] Starting background backfill for last 30 days...');
-    console.log('[startup] Server is running, data will populate in 1-2 minutes.');
+    console.log('[startup] Will start background backfill in 30 seconds...');
+    console.log('[startup] (Waiting to let realtime WebSocket establish connection first)');
 
-    // Run in background - don't wait for it to finish
-    exec('node backfill.js', (error, stdout, stderr) => {
-      if (error) {
-        console.error('[startup] Backfill error:', error.message);
-        return;
-      }
-      if (stdout) console.log('[backfill]', stdout);
-      if (stderr) console.error('[backfill]', stderr);
-      console.log('[startup] Background backfill complete!');
-    });
+    // Wait 30s before starting backfill to let realtime connect and start populating data.
+    // This avoids rate limit conflicts between backfill and realtime at startup.
+    setTimeout(() => {
+      console.log('[startup] Starting background backfill...');
+      exec('node backfill.js', (error, stdout, stderr) => {
+        if (error) {
+          console.error('[startup] Backfill error:', error.message);
+          return;
+        }
+        if (stdout) console.log('[backfill]', stdout);
+        if (stderr) console.error('[backfill]', stderr);
+        console.log('[startup] Background backfill complete!');
+      });
+    }, 30000);
   }
 }
 
