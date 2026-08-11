@@ -30,14 +30,17 @@ async function backfillYear() {
     }
   }
 
-  // Find the oldest reading we already have.
-  const oldest = span?.oldest ? span.oldest - ONE_DAY : Date.now() - 365 * ONE_DAY;
-  const startFrom = oldest;
+  // Always go back 365 days from today to ensure we fetch all available historical data.
+  // If the DB already has recent data (e.g., from realtime), we'll skip those duplicates
+  // and import the older historical data that's missing.
+  const startFrom = Date.now() - 365 * ONE_DAY;
+  const oldestInDb = span?.oldest || Date.now();
 
   let date = Date.now();
   let imported = 0;
   let skipped = 0;
   let consecutiveSkips = 0;
+  let passedOldestData = false; // Track when we've moved past existing data
 
   while (date > startFrom) {
     const endDate = new Date(date).toISOString();
@@ -73,12 +76,20 @@ async function backfillYear() {
 
       console.log(`[backfill]   → ${records.length} records (${dayImported} new, ${records.length - dayImported} skipped)`);
 
+      // Check if we've moved past the oldest data in the DB (entering historical territory)
+      if (!passedOldestData && date < oldestInDb) {
+        passedOldestData = true;
+        console.log('[backfill] Moved past existing data, now importing historical records...');
+      }
+
       // If we skipped an entire day (already have all that data), track it.
+      // BUT only stop early if we've already passed the existing DB data.
+      // This prevents stopping when we encounter recent realtime data that's already in DB.
       if (dayImported === 0) {
         consecutiveSkips++;
-        // If we've skipped 5 consecutive days, we've reached already-imported territory.
-        if (consecutiveSkips >= 5) {
-          console.log('[backfill] 5 consecutive days already in DB, stopping early.');
+        // Only apply early exit if we've passed existing data AND hit 5 consecutive skips
+        if (passedOldestData && consecutiveSkips >= 5) {
+          console.log('[backfill] 5 consecutive days with no new data in historical range, stopping.');
           break;
         }
       } else {
