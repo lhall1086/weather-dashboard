@@ -684,7 +684,7 @@ async function loadActiveAlerts() {
     };
 
     // Add each alert polygon to the map
-    L.geoJSON(geojson, {
+    const geoJsonLayer = L.geoJSON(geojson, {
       style: (feature) => {
         const event = feature.properties?.event || 'Unknown';
         const color = alertColors[event] || '#999999';
@@ -697,32 +697,69 @@ async function loadActiveAlerts() {
         };
       },
       onEachFeature: (feature, layer) => {
-        const props = feature.properties;
-        const event = props?.event || 'Unknown Alert';
-        const headline = props?.headline || '';
-        const description = props?.description || '';
-        const instruction = props?.instruction || '';
+        // Add click handler to detect ALL overlapping alerts at the clicked point
+        layer.on('click', (e) => {
+          const clickedPoint = e.latlng;
+          const overlappingAlerts = [];
 
-        let popupContent = `<div style="max-width: 300px;">
-          <h3 style="margin: 0 0 8px 0; color: #333; font-size: 1rem;">${event}</h3>`;
+          // Check all alert layers to find which ones contain this point
+          alertsLayer.eachLayer((alertLayer) => {
+            if (alertLayer.getBounds && alertLayer.getBounds().contains(clickedPoint)) {
+              // More precise check: does the polygon actually contain this point?
+              // Use Leaflet's geometry to check if point is inside polygon
+              if (alertLayer.feature && alertLayer.feature.geometry) {
+                const geom = alertLayer.feature.geometry;
+                if (isPointInFeature(clickedPoint, geom)) {
+                  overlappingAlerts.push(alertLayer.feature.properties);
+                }
+              }
+            }
+          });
 
-        if (headline) {
-          popupContent += `<p style="margin: 4px 0; font-weight: 600; font-size: 0.9rem;">${headline}</p>`;
-        }
+          // Build combined popup content for all overlapping alerts
+          if (overlappingAlerts.length > 0) {
+            let popupContent = `<div style="max-width: 350px;">`;
 
-        if (description) {
-          const shortDesc = description.substring(0, 200) + (description.length > 200 ? '...' : '');
-          popupContent += `<p style="margin: 4px 0; font-size: 0.85rem;">${shortDesc}</p>`;
-        }
+            if (overlappingAlerts.length > 1) {
+              popupContent += `<p style="margin: 0 0 12px 0; font-weight: 600; color: #d32f2f; font-size: 0.9rem;">⚠️ ${overlappingAlerts.length} Active Alerts in This Area</p>`;
+            }
 
-        if (instruction) {
-          const shortInst = instruction.substring(0, 150) + (instruction.length > 150 ? '...' : '');
-          popupContent += `<p style="margin: 8px 0 0 0; font-size: 0.8rem; font-style: italic;"><strong>Instructions:</strong> ${shortInst}</p>`;
-        }
+            overlappingAlerts.forEach((props, idx) => {
+              const event = props?.event || 'Unknown Alert';
+              const headline = props?.headline || '';
+              const description = props?.description || '';
+              const instruction = props?.instruction || '';
 
-        popupContent += `</div>`;
+              if (idx > 0) {
+                popupContent += `<hr style="margin: 12px 0; border: none; border-top: 1px solid #ddd;">`;
+              }
 
-        layer.bindPopup(popupContent);
+              popupContent += `<h3 style="margin: 0 0 8px 0; color: #333; font-size: 1rem;">${event}</h3>`;
+
+              if (headline) {
+                popupContent += `<p style="margin: 4px 0; font-weight: 600; font-size: 0.9rem;">${headline}</p>`;
+              }
+
+              if (description) {
+                const shortDesc = description.substring(0, 200) + (description.length > 200 ? '...' : '');
+                popupContent += `<p style="margin: 4px 0; font-size: 0.85rem;">${shortDesc}</p>`;
+              }
+
+              if (instruction) {
+                const shortInst = instruction.substring(0, 150) + (instruction.length > 150 ? '...' : '');
+                popupContent += `<p style="margin: 8px 0 0 0; font-size: 0.8rem; font-style: italic;"><strong>Instructions:</strong> ${shortInst}</p>`;
+              }
+            });
+
+            popupContent += `</div>`;
+
+            // Show popup at clicked location with all alerts
+            L.popup()
+              .setLatLng(clickedPoint)
+              .setContent(popupContent)
+              .openOn(regionalMap);
+          }
+        });
       }
     }).addTo(alertsLayer);
 
@@ -730,6 +767,39 @@ async function loadActiveAlerts() {
   } catch (err) {
     console.warn('[map] active alerts failed:', err.message);
   }
+}
+
+// Helper function to check if a point is inside a GeoJSON geometry
+function isPointInFeature(latlng, geometry) {
+  if (geometry.type === 'Polygon') {
+    return isPointInPolygon(latlng, geometry.coordinates[0]);
+  } else if (geometry.type === 'MultiPolygon') {
+    for (const polygon of geometry.coordinates) {
+      if (isPointInPolygon(latlng, polygon[0])) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// Ray casting algorithm to check if point is inside polygon
+function isPointInPolygon(latlng, polygonCoords) {
+  const x = latlng.lng;
+  const y = latlng.lat;
+  let inside = false;
+
+  for (let i = 0, j = polygonCoords.length - 1; i < polygonCoords.length; j = i++) {
+    const xi = polygonCoords[i][0];
+    const yi = polygonCoords[i][1];
+    const xj = polygonCoords[j][0];
+    const yj = polygonCoords[j][1];
+
+    const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+
+  return inside;
 }
 
 // ---- year-over-year analytics ----
