@@ -48,8 +48,11 @@ async function backfillYear() {
       const records = await fetchHistory({ limit: 288, endDate });
 
       if (!records || records.length === 0) {
-        console.log('[backfill] No records returned, stopping.');
-        break;
+        console.log('[backfill] No records returned for this day, continuing...');
+        // Don't stop - the station might have been offline that day, keep checking older days
+        date -= ONE_DAY;
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        continue;
       }
 
       let dayImported = 0;
