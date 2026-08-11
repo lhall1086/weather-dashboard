@@ -510,8 +510,8 @@ const COUNTIES = {
 
 function initMap() {
   regionalMap = L.map('regional-map', {
-    center: [39.8283, -98.5795], // Center of USA
-    zoom: 5, // Start at US-wide view
+    center: [32.8, -86.8], // Center of Alabama
+    zoom: 7, // Show Alabama state view
     zoomControl: true,
     minZoom: 3,
     maxZoom: 12,
