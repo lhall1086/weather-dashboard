@@ -13,7 +13,21 @@ async function startup() {
       console.log('[startup] Database is empty. Will run backfill in background after server starts.');
       needsBackfill = true;
     } else {
-      console.log('[startup] Database has data. Latest reading:', latest.dateutc);
+      console.log('[startup] Database has data. Latest reading:', new Date(latest.dateutc).toISOString());
+
+      // Check if we need historical backfill (less than 30 days of data)
+      const { db } = await import('./db.js');
+      const span = db.prepare('SELECT MIN(dateutc) as oldest, MAX(dateutc) as newest, COUNT(*) as count FROM readings').get();
+      const spanDays = span.count ? Math.floor((span.newest - span.oldest) / (24 * 3600e3)) : 0;
+
+      console.log(`[startup] Database span: ${spanDays} days (${span.count} readings)`);
+
+      if (spanDays < 30) {
+        console.log('[startup] Less than 30 days of data. Will run backfill to populate history.');
+        needsBackfill = true;
+      } else {
+        console.log('[startup] Sufficient historical data. Skipping backfill.');
+      }
     }
   } catch (err) {
     console.warn('[startup] Could not check database:', err.message);
