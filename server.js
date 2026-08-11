@@ -12,7 +12,7 @@ import { getStormTotal, getHourlyIntensity, getRecentRainfall } from './precip.j
 import { fetchObservations, fetchNationwideObservations, fetchObservationsByBounds } from './observations.js';
 import { getYoYComparison, getMonthlyComparison } from './analytics.js';
 import { getHistory, getLatest, insertReading, getPressureTendency } from './db.js';
-import { startCollector } from './collector.js';
+import { startCollector, markRealtimeHealthy } from './collector.js';
 import { startRealtime, realtime } from './awn-realtime.js';
 import { getAstronomyData } from './astronomy.js';
 import { fetchAQI } from './aqi.js';
@@ -31,6 +31,7 @@ const sseClients = new Set();
 // Every realtime push: freshen the cache, persist it (denser history), and fan out to browsers.
 realtime.on('reading', (data) => {
   currentCache = { at: Date.now(), data };
+  markRealtimeHealthy(); // tell collector to stay idle (realtime is working)
   if (data.dateutc) {
     try { insertReading(data); } catch (err) { console.error('[server] insert failed:', err.message); }
   }
