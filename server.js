@@ -387,6 +387,27 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: Date.now() });
 });
 
+// Manual backfill trigger (for debugging) - only works in development or with secret param
+app.get('/api/backfill', async (req, res) => {
+  // Require secret parameter in production to prevent abuse
+  if (process.env.NODE_ENV === 'production' && req.query.secret !== process.env.BACKFILL_SECRET) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  try {
+    // Import and run backfill
+    const { backfillYear } = await import('./backfill.js');
+    res.json({ status: 'started', message: 'Backfill started in background. Check logs for progress.' });
+
+    // Run in background
+    backfillYear()
+      .then(() => console.log('[manual-backfill] Complete!'))
+      .catch((err) => console.error('[manual-backfill] Error:', err.message));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Serve the dashboard.
 app.use(express.static(join(__dirname, 'public')));
 
