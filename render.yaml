@@ -22,4 +22,10 @@ services:
         value: -85.7583
       - key: COLLECT_CRON
         value: "*/5 * * * *"
+      - key: WAQI_API_TOKEN
+        sync: false
     healthCheckPath: /health
+    disk:
+      name: weather-data
+      mountPath: /app/data
+      sizeGB: 1

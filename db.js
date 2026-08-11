@@ -3,10 +3,25 @@
 import Database from 'better-sqlite3';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { mkdirSync, existsSync } from 'fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-export const db = new Database(join(__dirname, 'weather.db'));
+// Use persistent disk on Render (survives restarts), fall back to local path for development
+const DB_PATH = process.env.RENDER
+  ? '/app/data/weather.db'
+  : join(__dirname, 'weather.db');
+
+// Ensure the data directory exists on Render
+if (process.env.RENDER) {
+  const dataDir = dirname(DB_PATH);
+  if (!existsSync(dataDir)) {
+    mkdirSync(dataDir, { recursive: true });
+  }
+}
+
+export const db = new Database(DB_PATH);
+console.log(`[db] Using database at: ${DB_PATH}`);
 db.pragma('journal_mode = WAL'); // better concurrency: collector writes while server reads
 
 // The AWN fields we care about. Keys are AWN's field names (imperial by default).
