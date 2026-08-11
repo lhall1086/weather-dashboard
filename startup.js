@@ -1,6 +1,5 @@
 // Startup script - starts server immediately, runs backfill in background if needed
 import { getLatest } from './db.js';
-import { exec } from 'child_process';
 
 async function startup() {
   console.log('[startup] Checking database...');
@@ -33,15 +32,13 @@ async function startup() {
     // This avoids rate limit conflicts between backfill and realtime at startup.
     setTimeout(() => {
       console.log('[startup] Starting background backfill...');
-      exec('node backfill.js', (error, stdout, stderr) => {
-        if (error) {
-          console.error('[startup] Backfill error:', error.message);
-          return;
-        }
-        if (stdout) console.log('[backfill]', stdout);
-        if (stderr) console.error('[backfill]', stderr);
-        console.log('[startup] Background backfill complete!');
-      });
+
+      // Import and run backfill directly instead of exec (better error handling)
+      import('./backfill.js').then(({ backfillYear }) => {
+        backfillYear()
+          .then(() => console.log('[startup] Background backfill complete!'))
+          .catch((err) => console.error('[startup] Backfill failed:', err.message));
+      }).catch((err) => console.error('[startup] Failed to load backfill module:', err.message));
     }, 30000);
   }
 }
