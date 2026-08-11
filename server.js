@@ -387,6 +387,29 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: Date.now() });
 });
 
+// Database status check (for debugging)
+app.get('/api/db-status', (req, res) => {
+  try {
+    const { db } = require('./db.js');
+    const latest = db.prepare('SELECT MAX(dateutc) as newest FROM readings').get();
+    const span = db.prepare('SELECT MIN(dateutc) as oldest, MAX(dateutc) as newest, COUNT(*) as count FROM readings').get();
+    const spanDays = span.count ? Math.floor((span.newest - span.oldest) / (24 * 3600e3)) : 0;
+
+    res.json({
+      count: span.count || 0,
+      spanDays,
+      oldest: span.oldest ? new Date(span.oldest).toISOString() : null,
+      newest: span.newest ? new Date(span.newest).toISOString() : null,
+      needsBackfill: spanDays < 30,
+      message: spanDays < 30
+        ? `Database has ${spanDays} days of data. Backfill should trigger automatically on next restart.`
+        : `Database has ${spanDays} days of data. No backfill needed.`
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Manual backfill trigger (for debugging) - only works in development or with secret param
 app.get('/api/backfill', async (req, res) => {
   // Require secret parameter in production to prevent abuse
