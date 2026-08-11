@@ -168,30 +168,35 @@ export async function fetch7Day() {
 function aggregate7Day(periods) {
   const days = [];
   for (let i = 0; i < periods.length; i += 2) {
-    const day = periods[i];
-    const night = periods[i + 1];
-    if (!day) break;
+    const first = periods[i];
+    const second = periods[i + 1];
+    if (!first) break;
 
-    const date = new Date(day.startTime);
-    const high = day.isDaytime ? day.temp : night?.temp;
-    const low = night?.temp ?? day.temp;
+    // NWS returns 14 periods starting from "now" — could be a daytime or nighttime
+    // period first. Identify which is day vs night by isDaytime, not by position.
+    const dayPeriod = first.isDaytime ? first : second;
+    const nightPeriod = first.isDaytime ? second : first;
 
-    const detailedDay = day.detailedForecast || day.shortForecast;
-    const detailedNight = night?.detailedForecast || night?.shortForecast || '';
+    const date = new Date(first.startTime);
+    const high = dayPeriod?.temp ?? nightPeriod?.temp;  // prefer day temp as high
+    const low = nightPeriod?.temp ?? dayPeriod?.temp;   // prefer night temp as low
+
+    const detailedDay = dayPeriod?.detailedForecast || dayPeriod?.shortForecast || '';
+    const detailedNight = nightPeriod?.detailedForecast || nightPeriod?.shortForecast || '';
     const hasSevereKeywords =
       SEVERE_KEYWORDS.test(detailedDay) || SEVERE_KEYWORDS.test(detailedNight);
 
     days.push({
-      name: day.name.replace(/\s+(Night|Day)$/i, ''), // "Tonight" -> "Tonight", "Monday" -> "Monday"
+      name: first.name.replace(/\s+(Night|Day)$/i, ''), // "Tonight" -> "Tonight", "Monday" -> "Monday"
       date: date.toISOString().split('T')[0],
       high,
       low,
-      dayConditions: day.shortForecast,
-      nightConditions: night?.shortForecast || '',
-      dayIcon: day.icon,
-      nightIcon: night?.icon || day.icon,
-      precipDay: day.precip,
-      precipNight: night?.precip,
+      dayConditions: dayPeriod?.shortForecast || nightPeriod?.shortForecast || '',
+      nightConditions: nightPeriod?.shortForecast || '',
+      dayIcon: dayPeriod?.icon || nightPeriod?.icon,
+      nightIcon: nightPeriod?.icon || dayPeriod?.icon,
+      precipDay: dayPeriod?.precip,
+      precipNight: nightPeriod?.precip,
       detailedForecast: detailedDay + (detailedNight ? ' ' + detailedNight : ''),
       hasSevereKeywords,
     });
