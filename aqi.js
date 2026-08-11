@@ -1,10 +1,10 @@
-// Air Quality Index (AQI) data from EPA's AirNow API.
-// Requires a free API key from https://docs.airnowapi.org/account/request/
-// Set AIRNOW_API_KEY in .env — if missing, this module returns null gracefully.
+// Air Quality Index (AQI) data from WAQI (World Air Quality Index Project).
+// Requires a free API token from https://aqicn.org/data-platform/token/
+// Set WAQI_API_TOKEN in .env — if missing, this module returns null gracefully.
 import 'dotenv/config';
 
-const { LAT, LON, AIRNOW_API_KEY } = process.env;
-const AIRNOW_BASE = 'https://www.airnowapi.org/aq';
+const { LAT, LON, WAQI_API_TOKEN } = process.env;
+const WAQI_BASE = 'https://api.waqi.info';
 
 let aqiCache = { at: 0, data: null };
 const AQI_TTL = 60 * 60 * 1000; // 1h (AQI updates hourly)
@@ -23,11 +23,11 @@ function getAQILevel(aqi) {
   return AQI_LEVELS.find((lvl) => aqi <= lvl.max) || AQI_LEVELS[AQI_LEVELS.length - 1];
 }
 
-// Fetch current AQI by lat/lon. Returns the worst (highest) pollutant's AQI.
-// Falls back gracefully if API key is missing or API fails.
+// Fetch current AQI by lat/lon from WAQI. Returns overall AQI and dominant pollutant.
+// Falls back gracefully if API token is missing or API fails.
 export async function fetchAQI() {
-  if (!AIRNOW_API_KEY) {
-    console.warn('[aqi] AIRNOW_API_KEY missing in .env — AQI unavailable. Get a free key at https://docs.airnowapi.org/account/request/');
+  if (!WAQI_API_TOKEN) {
+    console.warn('[aqi] WAQI_API_TOKEN missing in .env — AQI unavailable. Get a free token at https://aqicn.org/data-platform/token/');
     return null;
   }
 
@@ -36,32 +36,54 @@ export async function fetchAQI() {
 
   try {
     if (!LAT || !LON) throw new Error('Missing LAT/LON in .env');
-    const url = `${AIRNOW_BASE}/observation/latLong/current/?format=application/json&latitude=${LAT}&longitude=${LON}&distance=25&API_KEY=${AIRNOW_API_KEY}`;
+
+    // WAQI API: finds the nearest station to the given coordinates
+    const url = `${WAQI_BASE}/feed/geo:${LAT};${LON}/?token=${WAQI_API_TOKEN}`;
     const res = await fetch(url);
 
-    if (!res.ok) throw new Error(`AirNow API failed: ${res.status}`);
-    const data = await res.json();
+    if (!res.ok) throw new Error(`WAQI API failed: ${res.status}`);
+    const response = await res.json();
 
-    // AirNow returns an array of observations (one per pollutant: PM2.5, PM10, O3, etc.).
-    // We take the worst (highest AQI) as the overall air quality.
-    if (!Array.isArray(data) || data.length === 0) {
-      console.warn('[aqi] No AQI data returned for this location');
+    if (response.status !== 'ok' || !response.data) {
+      console.warn('[aqi] No AQI data returned:', response.data || 'unknown error');
       return null;
     }
 
-    const worst = data.reduce((max, obs) => (obs.AQI > max.AQI ? obs : max), data[0]);
-    const level = getAQILevel(worst.AQI);
+    const data = response.data;
+    const aqi = data.aqi;
+
+    if (aqi === '-' || aqi == null) {
+      console.warn('[aqi] AQI value unavailable for this location');
+      return null;
+    }
+
+    const level = getAQILevel(aqi);
+
+    // Determine dominant pollutant from iaqi (individual pollutant readings)
+    let dominantPollutant = 'PM2.5'; // default
+    if (data.dominentpol) {
+      dominantPollutant = data.dominentpol.toUpperCase();
+    } else if (data.iaqi) {
+      // Find the pollutant with highest individual AQI
+      let maxVal = 0;
+      for (const [pollutant, reading] of Object.entries(data.iaqi)) {
+        if (reading.v > maxVal) {
+          maxVal = reading.v;
+          dominantPollutant = pollutant.toUpperCase();
+        }
+      }
+    }
 
     const result = {
-      aqi: worst.AQI,
-      category: worst.Category.Name,
-      pollutant: worst.ParameterName, // e.g. "PM2.5", "OZONE"
+      aqi: aqi,
+      category: level.label,
+      pollutant: dominantPollutant,
       level: level.label,
       color: level.color,
       textColor: level.textColor,
-      reportingArea: worst.ReportingArea,
-      stateCode: worst.StateCode,
-      timestamp: worst.DateObserved + ' ' + worst.HourObserved + ':00',
+      stationName: data.city?.name || 'Unknown Station',
+      timestamp: data.time?.s || new Date().toISOString(),
+      location: data.city?.geo ? `${data.city.geo[0]}, ${data.city.geo[1]}` : null,
     };
 
     aqiCache = { at: now, data: result };

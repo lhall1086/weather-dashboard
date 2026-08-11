@@ -960,6 +960,7 @@ async function loadAQI() {
       <div style="font-size: 0.75rem; color: var(--ink-dim); margin-top: 0.5rem;">
         Primary: ${data.pollutant}
       </div>
+      ${data.stationName ? `<div style="font-size: 0.7rem; color: var(--ink-dim); margin-top: 0.3rem; font-style: italic;">Station: ${data.stationName}</div>` : ''}
     `;
   } catch (err) {
     console.warn('[aqi]', err.message);
