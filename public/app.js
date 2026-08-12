@@ -764,7 +764,9 @@ async function startPrecipitationAnimation() {
         {
           opacity: 0,
           attribution: 'RainViewer',
-          maxZoom: 12,
+          minZoom: 1,
+          maxZoom: 18, // Allow all zoom levels
+          maxNativeZoom: 12, // Radar data only available up to zoom 12, scale tiles beyond
         }
       );
       precipLayer.addLayer(layer);
@@ -804,11 +806,15 @@ function stopPrecipitationAnimation() {
   precipAnimationLayers = [];
 }
 
+// Store all alert layers for overlap detection
+let allAlertLayers = [];
+
 // Load active alerts from NWS GeoJSON
 async function loadActiveAlerts() {
   try {
     // Clear existing alerts
     alertsLayer.clearLayers();
+    allAlertLayers = [];
 
     const res = await fetch('/api/alerts/geojson');
     const geojson = await res.json();
@@ -824,7 +830,7 @@ async function loadActiveAlerts() {
     };
 
     // Add each alert polygon to the map
-    const geoJsonLayer = L.geoJSON(geojson, {
+    L.geoJSON(geojson, {
       style: (feature) => {
         const event = feature.properties?.event || 'Unknown';
         const color = alertColors[event] || '#999999';
@@ -837,21 +843,22 @@ async function loadActiveAlerts() {
         };
       },
       onEachFeature: (feature, layer) => {
+        // Store layer for overlap detection
+        allAlertLayers.push(layer);
+
         // Add click handler to detect ALL overlapping alerts at the clicked point
         layer.on('click', (e) => {
+          L.DomEvent.stopPropagation(e); // Prevent map click
+
           const clickedPoint = e.latlng;
           const overlappingAlerts = [];
 
           // Check all alert layers to find which ones contain this point
-          alertsLayer.eachLayer((alertLayer) => {
-            if (alertLayer.getBounds && alertLayer.getBounds().contains(clickedPoint)) {
-              // More precise check: does the polygon actually contain this point?
-              // Use Leaflet's geometry to check if point is inside polygon
-              if (alertLayer.feature && alertLayer.feature.geometry) {
-                const geom = alertLayer.feature.geometry;
-                if (isPointInFeature(clickedPoint, geom)) {
-                  overlappingAlerts.push(alertLayer.feature.properties);
-                }
+          allAlertLayers.forEach((alertLayer) => {
+            if (alertLayer.feature && alertLayer.feature.geometry) {
+              const geom = alertLayer.feature.geometry;
+              if (isPointInFeature(clickedPoint, geom)) {
+                overlappingAlerts.push(alertLayer.feature.properties);
               }
             }
           });
@@ -900,8 +907,11 @@ async function loadActiveAlerts() {
               .openOn(regionalMap);
           }
         });
+
+        // Add layer to map
+        layer.addTo(alertsLayer);
       }
-    }).addTo(alertsLayer);
+    });
 
     console.log('[map] Loaded', geojson.features.length, 'active alerts', geojson.counts || '');
   } catch (err) {

@@ -17,6 +17,46 @@ function cleanName(name, id) {
   return name.replace(/,?\s*US$/, '').trim();
 }
 
+// Calculate heat index (feels like temp in hot/humid conditions)
+// Formula from NWS: https://www.wpc.ncep.noaa.gov/html/heatindex_equation.shtml
+function calculateHeatIndex(tempF, humidity) {
+  const T = tempF;
+  const RH = humidity;
+
+  // Simple formula for initial estimate
+  let HI = 0.5 * (T + 61.0 + ((T - 68.0) * 1.2) + (RH * 0.094));
+
+  // If average is >= 80, use the full Rothfusz regression
+  if ((HI + T) / 2 >= 80) {
+    HI = -42.379 + 2.04901523 * T + 10.14333127 * RH - 0.22475541 * T * RH
+       - 0.00683783 * T * T - 0.05481717 * RH * RH + 0.00122874 * T * T * RH
+       + 0.00085282 * T * RH * RH - 0.00000199 * T * T * RH * RH;
+
+    // Adjustments for low/high humidity
+    if (RH < 13 && T >= 80 && T <= 112) {
+      HI -= ((13 - RH) / 4) * Math.sqrt((17 - Math.abs(T - 95)) / 17);
+    } else if (RH > 85 && T >= 80 && T <= 87) {
+      HI += ((RH - 85) / 10) * ((87 - T) / 5);
+    }
+  }
+
+  return HI;
+}
+
+// Calculate wind chill (feels like temp in cold/windy conditions)
+// Formula from NWS: https://www.weather.gov/media/epz/wxcalc/windChill.pdf
+function calculateWindChill(tempF, windSpeedMph) {
+  // Wind chill only applies when temp <= 50°F and wind > 3 mph
+  if (tempF > 50 || windSpeedMph <= 3) {
+    return tempF;
+  }
+
+  const WC = 35.74 + 0.6215 * tempF - 35.75 * Math.pow(windSpeedMph, 0.16)
+           + 0.4275 * tempF * Math.pow(windSpeedMph, 0.16);
+
+  return WC;
+}
+
 // Live observations within a geographic bounding box, via NOAA's Aviation Weather
 // Center METAR API. This is the authoritative, nationwide source and — unlike a
 // fixed station list — returns every reporting station actually inside the view,
@@ -91,15 +131,33 @@ export async function fetchObservations() {
         const tempC = props.temperature?.value;
         const tempF = tempC != null ? Math.round((tempC * 9) / 5 + 32) : null;
 
-        // Get heat index or wind chill (NWS provides these in the API)
+        // Get additional data for feels-like calculation
+        const humidity = props.relativeHumidity?.value; // percentage
+        const windSpeedKmh = props.windSpeed?.value;
+        const windSpeedMph = windSpeedKmh != null ? windSpeedKmh * 0.621371 : null;
+
+        // Try to get NWS-provided heat index or wind chill first
         const heatIndexC = props.heatIndex?.value;
         const windChillC = props.windChill?.value;
 
         let feelsLike = tempF;
+
+        // Use NWS values if available
         if (heatIndexC != null) {
           feelsLike = Math.round((heatIndexC * 9) / 5 + 32);
         } else if (windChillC != null) {
           feelsLike = Math.round((windChillC * 9) / 5 + 32);
+        }
+        // Otherwise calculate manually
+        else if (tempF != null) {
+          // Calculate heat index if it's warm (>80°F) and we have humidity
+          if (tempF >= 80 && humidity != null) {
+            feelsLike = Math.round(calculateHeatIndex(tempF, humidity));
+          }
+          // Calculate wind chill if it's cold (<=50°F) and we have wind speed
+          else if (tempF <= 50 && windSpeedMph != null && windSpeedMph > 3) {
+            feelsLike = Math.round(calculateWindChill(tempF, windSpeedMph));
+          }
         }
 
         return {
@@ -111,7 +169,7 @@ export async function fetchObservations() {
         };
       } catch (err) {
         console.warn(`[observations] ${station.id} failed:`, err.message);
-        return { ...station, temp: null, conditions: 'Unavailable' };
+        return { ...station, temp: null, feelsLike: null, conditions: 'Unavailable' };
       }
     })
   );
