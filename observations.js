@@ -91,9 +91,21 @@ export async function fetchObservations() {
         const tempC = props.temperature?.value;
         const tempF = tempC != null ? Math.round((tempC * 9) / 5 + 32) : null;
 
+        // Get heat index or wind chill (NWS provides these in the API)
+        const heatIndexC = props.heatIndex?.value;
+        const windChillC = props.windChill?.value;
+
+        let feelsLike = tempF;
+        if (heatIndexC != null) {
+          feelsLike = Math.round((heatIndexC * 9) / 5 + 32);
+        } else if (windChillC != null) {
+          feelsLike = Math.round((windChillC * 9) / 5 + 32);
+        }
+
         return {
           ...station,
           temp: tempF,
+          feelsLike: feelsLike,
           conditions: props.textDescription || 'N/A',
           timestamp: props.timestamp,
         };

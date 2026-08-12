@@ -485,8 +485,11 @@ $('#range-buttons').addEventListener('click', (e) => {
 let regionalMap = null;
 let satelliteLayer = null;
 let precipLayer = null;
+let precipAnimationLayers = [];
+let precipAnimationTimer = null;
 let alertsLayer = null;
 let tempMarkers = [];
+let feelsLikeMarkers = [];
 
 // Temperature color gradient (cold → warm)
 function tempColor(tempF) {
@@ -531,18 +534,17 @@ function initMap() {
     { opacity: 0.7, attribution: 'GOES Satellite', maxZoom: 10 }
   );
 
-  // Precipitation layer (NWS NEXRAD national mosaic - better nationwide coverage)
-  precipLayer = L.tileLayer(
-    'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png',
-    { opacity: 0.85, attribution: 'NWS NEXRAD', maxZoom: 12 }
-  );
+  // Precipitation layer (animated radar from RainViewer)
+  precipLayer = L.layerGroup();
 
   // Active Alerts layer (NWS GeoJSON - tornado, thunderstorm, flood watches/warnings)
   alertsLayer = L.featureGroup();
 
-  // Load active alerts on by default
+  // Load active alerts and precipitation on by default
   loadActiveAlerts();
   alertsLayer.addTo(regionalMap);
+  startPrecipitationAnimation();
+  precipLayer.addTo(regionalMap);
 
   // Auto-refresh alerts every 2 minutes
   setInterval(() => {
@@ -551,15 +553,16 @@ function initMap() {
     }
   }, 120000); // every 2 minutes
 
-  // Load temperature stations for the initial view.
-  loadTempsForView();
+  // DON'T load temperature stations initially (turned off by default now)
 
-  // Reload temps whenever the view changes (zoom OR pan) — bounds-based, so
-  // stations appear at every zoom level and in every region that has data.
-  // moveend fires for both pan and zoom; debounce so rapid drags don't spam.
+  // Reload temps/feels like whenever the view changes (zoom OR pan)
   regionalMap.on('moveend', () => {
-    if (!$('#toggle-temps').checked) return;
-    debouncedLoadTemps();
+    if ($('#toggle-temps').checked) {
+      debouncedLoadTemps();
+    }
+    if ($('#toggle-feelslike').checked) {
+      debouncedLoadFeelsLike();
+    }
   });
 
   // Layer toggle handlers
@@ -571,14 +574,27 @@ function initMap() {
     }
   });
 
+  $('#toggle-feelslike').addEventListener('change', (e) => {
+    if (e.target.checked) {
+      loadFeelsLikeForView();
+    } else {
+      clearFeelsLikeMarkers();
+    }
+  });
+
   $('#toggle-satellite').addEventListener('change', (e) => {
     if (e.target.checked) regionalMap.addLayer(satelliteLayer);
     else regionalMap.removeLayer(satelliteLayer);
   });
 
   $('#toggle-precipitation').addEventListener('change', (e) => {
-    if (e.target.checked) regionalMap.addLayer(precipLayer);
-    else regionalMap.removeLayer(precipLayer);
+    if (e.target.checked) {
+      startPrecipitationAnimation();
+      regionalMap.addLayer(precipLayer);
+    } else {
+      stopPrecipitationAnimation();
+      regionalMap.removeLayer(precipLayer);
+    }
   });
 
   $('#toggle-alerts').addEventListener('change', (e) => {
@@ -662,6 +678,130 @@ let tempLoadTimer = null;
 function debouncedLoadTemps() {
   clearTimeout(tempLoadTimer);
   tempLoadTimer = setTimeout(loadTempsForView, 400);
+}
+
+// Remove all feels like markers from the map.
+function clearFeelsLikeMarkers() {
+  feelsLikeMarkers.forEach((m) => regionalMap.removeLayer(m));
+  feelsLikeMarkers = [];
+}
+
+// Load "feels like" temperature stations (heat index in summer, wind chill in winter)
+async function loadFeelsLikeForView() {
+  try {
+    clearFeelsLikeMarkers();
+
+    const bounds = regionalMap.getBounds();
+    const minLat = bounds.getSouth();
+    const minLon = bounds.getWest();
+    const maxLat = bounds.getNorth();
+    const maxLon = bounds.getEast();
+
+    const res = await fetch(`/api/observations?bbox=${minLat},${minLon},${maxLat},${maxLon}`);
+    const { stations } = await res.json();
+
+    if (!stations || stations.length === 0) {
+      console.log('[map] No feels like stations in view');
+      return;
+    }
+
+    const visible = declutterStations(stations, bounds);
+
+    feelsLikeMarkers = visible.map((s) => {
+      const feelsLike = s.feelsLike || s.temp; // Fallback to temp if feelsLike not available
+      const color = tempColor(feelsLike);
+      const label = L.marker([s.lat, s.lon], {
+        icon: L.divIcon({
+          className: 'temp-label-only',
+          html: `<div class="temp-text" style="color: ${color};">${Math.round(feelsLike)}°</div>`,
+          iconSize: [40, 20],
+        }),
+      });
+      label.bindPopup(`<b>${s.name}</b><br>Feels Like: ${Math.round(feelsLike)}°F<br>Actual: ${s.temp}°F<br>${s.conditions}`);
+      label.addTo(regionalMap);
+      return label;
+    });
+
+    console.log('[map] Loaded', feelsLikeMarkers.length, 'of', stations.length, 'in-view feels like stations');
+  } catch (err) {
+    console.warn('[map] feels like stations failed:', err.message);
+  }
+}
+
+let feelsLikeLoadTimer = null;
+function debouncedLoadFeelsLike() {
+  clearTimeout(feelsLikeLoadTimer);
+  feelsLikeLoadTimer = setTimeout(loadFeelsLikeForView, 400);
+}
+
+// Animated precipitation radar using RainViewer API
+async function startPrecipitationAnimation() {
+  try {
+    // Stop any existing animation
+    stopPrecipitationAnimation();
+
+    // Fetch available radar timestamps from RainViewer
+    const res = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+    const data = await res.json();
+
+    if (!data.radar || !data.radar.past || data.radar.past.length === 0) {
+      console.warn('[map] No radar data available from RainViewer');
+      return;
+    }
+
+    // Get the last 10 frames (past radar images)
+    const frames = data.radar.past.slice(-10);
+    let currentFrame = 0;
+
+    // Clear existing layers
+    precipAnimationLayers.forEach(layer => precipLayer.removeLayer(layer));
+    precipAnimationLayers = [];
+
+    // Create tile layers for each frame
+    frames.forEach((frame) => {
+      const layer = L.tileLayer(
+        `https://tilecache.rainviewer.com${frame.path}/256/{z}/{x}/{y}/2/1_1.png`,
+        {
+          opacity: 0,
+          attribution: 'RainViewer',
+          maxZoom: 12,
+        }
+      );
+      precipLayer.addLayer(layer);
+      precipAnimationLayers.push(layer);
+    });
+
+    // Animate through frames
+    function animateRadar() {
+      // Hide all layers
+      precipAnimationLayers.forEach(layer => layer.setOpacity(0));
+
+      // Show current frame
+      if (precipAnimationLayers[currentFrame]) {
+        precipAnimationLayers[currentFrame].setOpacity(0.7);
+      }
+
+      // Move to next frame
+      currentFrame = (currentFrame + 1) % precipAnimationLayers.length;
+    }
+
+    // Start animation (change frame every 500ms)
+    animateRadar(); // Show first frame immediately
+    precipAnimationTimer = setInterval(animateRadar, 500);
+
+    console.log('[map] Started precipitation animation with', frames.length, 'frames');
+  } catch (err) {
+    console.warn('[map] precipitation animation failed:', err.message);
+  }
+}
+
+function stopPrecipitationAnimation() {
+  if (precipAnimationTimer) {
+    clearInterval(precipAnimationTimer);
+    precipAnimationTimer = null;
+  }
+  precipAnimationLayers.forEach(layer => precipLayer.removeLayer(layer));
+  precipAnimationLayers = [];
 }
 
 // Load active alerts from NWS GeoJSON
