@@ -221,17 +221,44 @@ async function load7Day() {
   }
 }
 
-// ---- alerts ----
+// ---- alerts with location toggle ----
+let alertLocationMode = localStorage.getItem('alertLocationMode') || 'station'; // 'station' or 'user'
+let userLocation = null;
+
 async function loadAlerts() {
   try {
-    const res = await fetch('/api/alerts');
-    const { alerts, location } = await res.json();
+    let alerts, locationLabel;
+
+    if (alertLocationMode === 'user' && userLocation) {
+      // Fetch alerts for user's location
+      const result = await fetchAlertsForLocation(userLocation.lat, userLocation.lon);
+      alerts = result.alerts;
+      locationLabel = result.locationLabel;
+    } else {
+      // Fetch alerts for station location (default)
+      const res = await fetch('/api/alerts');
+      const data = await res.json();
+      alerts = data.alerts;
+      locationLabel = data.location || 'Montgomery, AL';
+    }
+
     const banner = $('#alerts-banner');
+    const noAlertsMsg = $('#no-alerts-msg');
+    const locationLabelEl = $('#alert-location-label');
+
+    // Update location label
+    if (locationLabelEl) {
+      locationLabelEl.textContent = `(${locationLabel})`;
+    }
+
     if (!alerts || alerts.length === 0) {
       banner.style.display = 'none';
+      noAlertsMsg.style.display = 'block';
       return;
     }
+
     banner.style.display = 'block';
+    noAlertsMsg.style.display = 'none';
     banner.innerHTML = alerts
       .map((a) => {
         const instruction = a.instruction ? `<div class="instruction">${a.instruction}</div>` : '';
@@ -245,6 +272,134 @@ async function loadAlerts() {
       .join('');
   } catch (err) {
     console.warn('[alerts]', err.message);
+    const banner = $('#alerts-banner');
+    const noAlertsMsg = $('#no-alerts-msg');
+    banner.style.display = 'none';
+    noAlertsMsg.style.display = 'block';
+    noAlertsMsg.textContent = 'Error loading alerts';
+  }
+}
+
+// Fetch alerts for a specific location from NWS API
+async function fetchAlertsForLocation(lat, lon) {
+  try {
+    // Use NWS active alerts API with point parameter
+    const url = `https://api.weather.gov/alerts/active?point=${lat},${lon}`;
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'local-weather-dashboard (contact: you@example.com)' }
+    });
+
+    if (!res.ok) throw new Error(`NWS alerts failed: ${res.status}`);
+
+    const data = await res.json();
+    const features = data.features || [];
+
+    // Parse alerts
+    const alerts = features.map(f => ({
+      event: f.properties.event,
+      severity: f.properties.severity,
+      headline: f.properties.headline,
+      instruction: f.properties.instruction,
+      description: f.properties.description
+    }));
+
+    // Get location name from reverse geocoding
+    let locationLabel = `${lat.toFixed(2)}, ${lon.toFixed(2)}`;
+    try {
+      const geoRes = await fetch(`https://api.weather.gov/points/${lat},${lon}`);
+      if (geoRes.ok) {
+        const geoData = await geoRes.json();
+        const city = geoData.properties?.relativeLocation?.properties?.city;
+        const state = geoData.properties?.relativeLocation?.properties?.state;
+        if (city && state) {
+          locationLabel = `${city}, ${state}`;
+        }
+      }
+    } catch (err) {
+      console.warn('[alerts] reverse geocoding failed:', err.message);
+    }
+
+    return { alerts, locationLabel };
+  } catch (err) {
+    console.warn('[alerts] fetch for location failed:', err.message);
+    return { alerts: [], locationLabel: 'Unknown Location' };
+  }
+}
+
+// Get user's location via browser geolocation API
+function getUserLocation() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('Geolocation not supported'));
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        resolve({
+          lat: position.coords.latitude,
+          lon: position.coords.longitude
+        });
+      },
+      (error) => {
+        let message = 'Location access denied';
+        if (error.code === error.TIMEOUT) message = 'Location request timed out';
+        if (error.code === error.POSITION_UNAVAILABLE) message = 'Location unavailable';
+        reject(new Error(message));
+      },
+      { timeout: 10000, maximumAge: 300000 } // 10s timeout, 5min cache
+    );
+  });
+}
+
+// Handle location toggle button
+async function handleLocationToggle() {
+  const btn = $('#location-toggle-btn');
+
+  if (alertLocationMode === 'station') {
+    // Switch to user location
+    btn.disabled = true;
+    btn.textContent = '⏳ Getting location...';
+
+    try {
+      userLocation = await getUserLocation();
+      alertLocationMode = 'user';
+      localStorage.setItem('alertLocationMode', 'user');
+      btn.textContent = '🏠 Show Station Alerts';
+      btn.disabled = false;
+      loadAlerts();
+    } catch (err) {
+      alert(`Could not get your location: ${err.message}\n\nPlease allow location access in your browser settings.`);
+      btn.textContent = '📍 Use My Location';
+      btn.disabled = false;
+    }
+  } else {
+    // Switch back to station location
+    alertLocationMode = 'station';
+    localStorage.setItem('alertLocationMode', 'station');
+    btn.textContent = '📍 Use My Location';
+    loadAlerts();
+  }
+}
+
+// Initialize location toggle button
+if ($('#location-toggle-btn')) {
+  $('#location-toggle-btn').addEventListener('click', handleLocationToggle);
+
+  // If user previously selected their location, try to load it
+  if (alertLocationMode === 'user') {
+    getUserLocation()
+      .then(location => {
+        userLocation = location;
+        $('#location-toggle-btn').textContent = '🏠 Show Station Alerts';
+        loadAlerts();
+      })
+      .catch(() => {
+        // Fall back to station mode if geolocation fails
+        alertLocationMode = 'station';
+        localStorage.setItem('alertLocationMode', 'station');
+        loadAlerts();
+      });
   }
 }
 

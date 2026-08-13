@@ -132,8 +132,6 @@ body {
 
 /* Alerts banner */
 .alerts-banner {
-  margin: 0 1.25rem;
-  margin-top: 1rem;
   border-radius: var(--radius);
   overflow: hidden;
 }
@@ -150,6 +148,31 @@ body {
 .alert-item .event { font-weight: 600; font-size: 0.95rem; color: var(--ink); }
 .alert-item .headline { font-size: 0.82rem; color: var(--ink-dim); margin-top: 0.2rem; }
 .alert-item .instruction { font-size: 0.8rem; color: var(--ink-dim); margin-top: 0.4rem; font-style: italic; }
+
+/* Location toggle button */
+.location-btn {
+  padding: 0.5rem 1rem;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+.location-btn:hover {
+  background: #3d8fbc;
+  transform: translateY(-1px);
+}
+.location-btn:active {
+  transform: translateY(0);
+}
+.location-btn:disabled {
+  background: var(--ink-dim);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
 
 .tiles {
   display: grid;
