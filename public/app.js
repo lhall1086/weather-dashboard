@@ -864,3 +864,102 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) return;
   loadMonthlyCharts();
 });
+
+// ========== Share Functionality ==========
+const shareBtn = document.getElementById('share-btn');
+const shareModal = document.getElementById('share-modal');
+const shareClose = document.getElementById('share-close');
+const shareOptions = document.querySelectorAll('.share-option');
+
+// Page info for sharing
+const pageUrl = window.location.href;
+const pageTitle = 'Local Weather Lab - Real-Time Local Weather Conditions';
+const pageDescription = 'Check out real-time weather conditions, forecasts, and alerts for East Central Alabama.';
+
+// Open share modal
+shareBtn?.addEventListener('click', () => {
+  // Try native Web Share API first (mobile)
+  if (navigator.share) {
+    navigator.share({
+      title: pageTitle,
+      text: pageDescription,
+      url: pageUrl
+    }).catch(err => {
+      // If native share is cancelled or fails, show modal
+      if (err.name !== 'AbortError') {
+        shareModal.classList.add('active');
+      }
+    });
+  } else {
+    // Desktop: show modal with options
+    shareModal.classList.add('active');
+  }
+});
+
+// Close modal
+shareClose?.addEventListener('click', () => {
+  shareModal.classList.remove('active');
+});
+
+// Close modal when clicking outside
+shareModal?.addEventListener('click', (e) => {
+  if (e.target === shareModal) {
+    shareModal.classList.remove('active');
+  }
+});
+
+// Handle share options
+shareOptions.forEach(option => {
+  option.addEventListener('click', () => {
+    const shareType = option.dataset.share;
+
+    switch(shareType) {
+      case 'facebook':
+        window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(pageUrl)}`, '_blank');
+        break;
+
+      case 'twitter':
+        window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(pageUrl)}&text=${encodeURIComponent(pageTitle)}`, '_blank');
+        break;
+
+      case 'whatsapp':
+        window.open(`https://wa.me/?text=${encodeURIComponent(pageTitle + ' ' + pageUrl)}`, '_blank');
+        break;
+
+      case 'email':
+        window.location.href = `mailto:?subject=${encodeURIComponent(pageTitle)}&body=${encodeURIComponent(pageDescription + '\n\n' + pageUrl)}`;
+        break;
+
+      case 'sms':
+        // SMS handling varies by platform
+        if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+          window.open(`sms:&body=${encodeURIComponent(pageTitle + ' ' + pageUrl)}`);
+        } else {
+          window.open(`sms:?body=${encodeURIComponent(pageTitle + ' ' + pageUrl)}`);
+        }
+        break;
+
+      case 'copy':
+        navigator.clipboard.writeText(pageUrl).then(() => {
+          const copyText = document.getElementById('copy-text');
+          const originalText = copyText.textContent;
+          copyText.textContent = 'Copied!';
+          copyText.style.color = '#4ade80';
+          setTimeout(() => {
+            copyText.textContent = originalText;
+            copyText.style.color = '';
+          }, 2000);
+        }).catch(err => {
+          alert('Failed to copy link. Please copy manually: ' + pageUrl);
+        });
+        break;
+    }
+
+    // Close modal after action (except for copy which shows feedback)
+    if (shareType !== 'copy') {
+      setTimeout(() => {
+        shareModal.classList.remove('active');
+      }, 300);
+    }
+  });
+});
