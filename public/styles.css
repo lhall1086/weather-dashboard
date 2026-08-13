@@ -32,6 +32,23 @@ body {
 .topbar .header-content { display: flex; flex-direction: column; gap: 0.25rem; }
 .topbar h1 { margin: 0; font-size: 1.35rem; letter-spacing: 0.02em; }
 .topbar .tagline { margin: 0; font-size: 0.85rem; color: var(--ink-dim); font-weight: 400; }
+.topbar .facebook-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: #1877F2;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+.topbar .facebook-link:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+.topbar .facebook-link svg {
+  flex-shrink: 0;
+}
 .meta { display: flex; gap: 0.6rem; align-items: center; color: var(--ink-dim); font-size: 0.85rem; }
 .badge {
   padding: 0.15rem 0.5rem;
