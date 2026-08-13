@@ -830,6 +830,41 @@ async function loadAQI() {
   }
 }
 
+async function loadUV() {
+  try {
+    const res = await fetch('/api/uv');
+    const data = await res.json();
+
+    if (!data.available || data.uv == null) {
+      $('#uv-tile').style.display = 'none';
+      return;
+    }
+
+    $('#uv-tile').style.display = 'block';
+    const uvTile = $('#uv-tile');
+
+    // Apply color-coded background
+    uvTile.style.background = data.color;
+    uvTile.style.color = data.textColor;
+
+    $('#uv-content').innerHTML = `
+      <div style="font-size: 1.5rem; font-weight: 600; margin-bottom: 0.3rem;">
+        ${data.icon} ${data.uv}
+      </div>
+      <div style="font-size: 0.85rem; font-weight: 500; margin-bottom: 0.3rem;">
+        ${data.level}
+      </div>
+      <div style="font-size: 0.7rem; opacity: 0.9; line-height: 1.3;">
+        ${data.protection}
+      </div>
+      ${data.uvMax ? `<div style="font-size: 0.7rem; opacity: 0.8; margin-top: 0.5rem;">Peak today: ${data.uvMax}</div>` : ''}
+    `;
+  } catch (err) {
+    console.warn('[uv]', err.message);
+    $('#uv-tile').style.display = 'none';
+  }
+}
+
 // ---- boot ----
 // initMap() removed - using Weather.gov iframe embed instead of custom map
 startStream();       // live current conditions via SSE (falls back to polling on error)
@@ -842,6 +877,7 @@ loadIndices();
 loadPrecip();
 loadAstronomy();
 loadAQI();
+loadUV();
 loadMonthlyCharts();
 loadHourly();
 loadTendency();
@@ -857,6 +893,7 @@ setInterval(loadTendency, REFRESH_MS);      // tendency refreshes with new stati
 setInterval(() => loadHistory(currentRange), REFRESH_MS * 5);
 setInterval(loadAstronomy, 60 * 60 * 1000); // sun/moon times refresh hourly (changes slowly)
 setInterval(loadAQI, 60 * 60 * 1000);       // AQI refreshes hourly
+setInterval(loadUV, 30 * 60 * 1000);        // UV refreshes every 30 min (changes throughout day)
 setInterval(loadMonthlyCharts, REFRESH_MS * 5); // historical charts refresh every 5 min
 
 // Refresh the charts the moment the user returns to the tab.

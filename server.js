@@ -16,6 +16,7 @@ import { startCollector, markRealtimeHealthy } from './collector.js';
 import { startRealtime, realtime } from './awn-realtime.js';
 import { getAstronomyData } from './astronomy.js';
 import { fetchAQI } from './aqi.js';
+import { fetchUVIndex } from './uv.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -151,6 +152,17 @@ app.get('/api/aqi', async (req, res) => {
   try {
     const aqi = await fetchAQI();
     res.json(aqi || { available: false });
+  } catch (err) {
+    res.status(500).json({ error: err.message, available: false });
+  }
+});
+
+// UV Index from OpenUV API. Requires UV_API_KEY in .env.
+// Returns null if key is missing or API fails (graceful degradation).
+app.get('/api/uv', async (req, res) => {
+  try {
+    const uv = await fetchUVIndex();
+    res.json(uv || { available: false });
   } catch (err) {
     res.status(500).json({ error: err.message, available: false });
   }
