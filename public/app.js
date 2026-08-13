@@ -1000,3 +1000,122 @@ shareOptions.forEach(option => {
     }
   });
 });
+
+// ========== Notification Settings ==========
+const notificationsBtn = document.getElementById('notifications-btn');
+const notificationsModal = document.getElementById('notifications-modal');
+const notificationsClose = document.getElementById('notifications-close');
+const notificationsEnabled = document.getElementById('notifications-enabled');
+const notificationOptions = document.getElementById('notification-options');
+const testNotificationBtn = document.getElementById('test-notification-btn');
+
+// Load preferences from localStorage
+function loadNotificationPrefs() {
+  const prefs = window.weatherNotifications.getPrefs();
+
+  notificationsEnabled.checked = prefs.enabled;
+  notificationOptions.style.display = prefs.enabled ? 'block' : 'none';
+
+  document.getElementById('notif-severe-weather').checked = prefs.severeWeather;
+  document.getElementById('notif-daily-summary').checked = prefs.dailySummary;
+
+  document.getElementById('notif-temp-below').checked = prefs.customAlerts.tempBelow.enabled;
+  document.getElementById('notif-temp-below-value').value = prefs.customAlerts.tempBelow.value;
+
+  document.getElementById('notif-temp-above').checked = prefs.customAlerts.tempAbove.enabled;
+  document.getElementById('notif-temp-above-value').value = prefs.customAlerts.tempAbove.value;
+
+  document.getElementById('notif-wind-above').checked = prefs.customAlerts.windAbove.enabled;
+  document.getElementById('notif-wind-above-value').value = prefs.customAlerts.windAbove.value;
+
+  document.getElementById('notif-rain-above').checked = prefs.customAlerts.rainAbove.enabled;
+  document.getElementById('notif-rain-above-value').value = prefs.customAlerts.rainAbove.value;
+}
+
+// Save preferences to localStorage
+function saveNotificationPrefs() {
+  const prefs = {
+    enabled: notificationsEnabled.checked,
+    severeWeather: document.getElementById('notif-severe-weather').checked,
+    dailySummary: document.getElementById('notif-daily-summary').checked,
+    customAlerts: {
+      tempBelow: {
+        enabled: document.getElementById('notif-temp-below').checked,
+        value: parseFloat(document.getElementById('notif-temp-below-value').value)
+      },
+      tempAbove: {
+        enabled: document.getElementById('notif-temp-above').checked,
+        value: parseFloat(document.getElementById('notif-temp-above-value').value)
+      },
+      windAbove: {
+        enabled: document.getElementById('notif-wind-above').checked,
+        value: parseFloat(document.getElementById('notif-wind-above-value').value)
+      },
+      rainAbove: {
+        enabled: document.getElementById('notif-rain-above').checked,
+        value: parseFloat(document.getElementById('notif-rain-above-value').value)
+      }
+    }
+  };
+
+  window.weatherNotifications.savePrefs(prefs);
+}
+
+// Open notifications modal
+notificationsBtn?.addEventListener('click', () => {
+  loadNotificationPrefs();
+  notificationsModal.classList.add('active');
+});
+
+// Close modal
+notificationsClose?.addEventListener('click', () => {
+  notificationsModal.classList.remove('active');
+});
+
+// Close modal when clicking outside
+notificationsModal?.addEventListener('click', (e) => {
+  if (e.target === notificationsModal) {
+    notificationsModal.classList.remove('active');
+  }
+});
+
+// Toggle notification options visibility
+notificationsEnabled?.addEventListener('change', async (e) => {
+  const enabled = e.target.checked;
+
+  if (enabled) {
+    // Check if browser supports notifications
+    if (!window.weatherNotifications.supports()) {
+      alert('Your browser does not support notifications. Please use a modern browser like Chrome, Firefox, or Edge.');
+      e.target.checked = false;
+      return;
+    }
+
+    // Request permission
+    const granted = await window.weatherNotifications.requestPermission();
+    if (!granted) {
+      alert('Notification permission denied. Please enable notifications in your browser settings.');
+      e.target.checked = false;
+      return;
+    }
+
+    // Initialize service worker
+    await window.weatherNotifications.init();
+
+    notificationOptions.style.display = 'block';
+  } else {
+    notificationOptions.style.display = 'none';
+  }
+
+  saveNotificationPrefs();
+});
+
+// Save preferences when any setting changes
+document.querySelectorAll('#notification-options input').forEach(input => {
+  input.addEventListener('change', saveNotificationPrefs);
+});
+
+// Test notification
+testNotificationBtn?.addEventListener('click', () => {
+  window.weatherNotifications.sendTest();
+});

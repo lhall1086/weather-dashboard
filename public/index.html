@@ -28,16 +28,23 @@
     <div class="header-right">
       <span id="updated">—</span>
       <span id="source-badge" class="badge"></span>
-      <button id="share-btn" class="share-btn" title="Share this page">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="18" cy="5" r="3"></circle>
-          <circle cx="6" cy="12" r="3"></circle>
-          <circle cx="18" cy="19" r="3"></circle>
-          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
-          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
-        </svg>
-        Share
-      </button>
+      <div style="display: flex; gap: 0.5rem;">
+        <button id="notifications-btn" class="header-icon-btn" title="Notification settings">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
+        </button>
+        <button id="share-btn" class="header-icon-btn" title="Share this page">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="18" cy="5" r="3"></circle>
+            <circle cx="6" cy="12" r="3"></circle>
+            <circle cx="18" cy="19" r="3"></circle>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+          </svg>
+        </button>
+      </div>
     </div>
   </header>
 
@@ -87,6 +94,90 @@
           </svg>
           <span id="copy-text">Copy Link</span>
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Settings Modal -->
+  <div id="notifications-modal" class="share-modal">
+    <div class="share-modal-content">
+      <div class="share-modal-header">
+        <h3>Notification Settings</h3>
+        <button id="notifications-close" class="share-close">&times;</button>
+      </div>
+      <div class="notifications-settings">
+        <div class="notification-section">
+          <div class="notification-toggle">
+            <label class="toggle-switch">
+              <input type="checkbox" id="notifications-enabled">
+              <span class="toggle-slider"></span>
+            </label>
+            <div class="toggle-label">
+              <strong>Enable Notifications</strong>
+              <small>Receive weather alerts on this device</small>
+            </div>
+          </div>
+        </div>
+
+        <div id="notification-options" style="display: none;">
+          <div class="notification-section">
+            <h4>Alert Types</h4>
+            <label class="checkbox-label">
+              <input type="checkbox" id="notif-severe-weather" checked>
+              <span>Severe Weather Alerts</span>
+              <small>Tornado, thunderstorm, flood warnings</small>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="notif-daily-summary">
+              <span>Daily Forecast Summary</span>
+              <small>Morning weather briefing</small>
+            </label>
+          </div>
+
+          <div class="notification-section">
+            <h4>Custom Thresholds</h4>
+            <label class="threshold-label">
+              <input type="checkbox" id="notif-temp-below">
+              <span>Temperature drops below</span>
+              <input type="number" id="notif-temp-below-value" value="32" min="-50" max="100" class="threshold-input">
+              <span>°F</span>
+            </label>
+            <label class="threshold-label">
+              <input type="checkbox" id="notif-temp-above">
+              <span>Temperature rises above</span>
+              <input type="number" id="notif-temp-above-value" value="95" min="0" max="150" class="threshold-input">
+              <span>°F</span>
+            </label>
+            <label class="threshold-label">
+              <input type="checkbox" id="notif-wind-above">
+              <span>Wind speed exceeds</span>
+              <input type="number" id="notif-wind-above-value" value="30" min="0" max="150" class="threshold-input">
+              <span>mph</span>
+            </label>
+            <label class="threshold-label">
+              <input type="checkbox" id="notif-rain-above">
+              <span>Rainfall exceeds</span>
+              <input type="number" id="notif-rain-above-value" value="1.0" min="0" max="20" step="0.1" class="threshold-input">
+              <span>inches</span>
+            </label>
+          </div>
+
+          <div class="notification-section">
+            <button id="test-notification-btn" class="test-notification-btn">
+              📢 Send Test Notification
+            </button>
+          </div>
+        </div>
+
+        <div class="notification-info">
+          <p><strong>How it works:</strong></p>
+          <ul>
+            <li>✅ Get instant alerts for severe weather</li>
+            <li>🔔 Notifications work even when the page is closed</li>
+            <li>⚙️ Customize thresholds for your needs</li>
+            <li>🔒 All preferences are stored locally on your device</li>
+          </ul>
+        </div>
       </div>
     </div>
   </div>
@@ -301,6 +392,7 @@
     <span id="foot-note"></span>
   </footer>
 
+  <script src="notifications.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
