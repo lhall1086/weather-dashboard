@@ -17,10 +17,23 @@ import { startRealtime, realtime } from './awn-realtime.js';
 import { getAstronomyData } from './astronomy.js';
 import { fetchAQI } from './aqi.js';
 import { fetchUVIndex } from './uv.js';
+import webpush from 'web-push';
+import { initSubscriptionsTable, saveSubscription, removeSubscription } from './subscriptions-db.js';
+import { startAlertMonitor } from './alert-monitor.js';
+import { scheduleDailySummary } from './daily-summary.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Configure web-push with VAPID keys
+const { VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT } = process.env;
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY && VAPID_SUBJECT) {
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+  console.log('[push] VAPID configured ✓');
+} else {
+  console.warn('[push] VAPID keys not configured - push notifications will be disabled');
+}
 
 // --- tiny in-memory cache for the live "current" call (respects AWN's 1 req/sec limit) ---
 let currentCache = { at: 0, data: null };
@@ -167,6 +180,71 @@ app.get('/api/uv', async (req, res) => {
     res.status(500).json({ error: err.message, available: false });
   }
 });
+
+// Push notification endpoints
+// Get VAPID public key (needed by frontend to subscribe)
+app.get('/api/notifications/vapid-key', (req, res) => {
+  if (!VAPID_PUBLIC_KEY) {
+    return res.status(503).json({ error: 'Push notifications not configured', available: false });
+  }
+  res.json({ publicKey: VAPID_PUBLIC_KEY, available: true });
+});
+
+// Subscribe to push notifications
+app.post('/api/notifications/subscribe', express.json(), (req, res) => {
+  try {
+    const { subscription, preferences } = req.body;
+
+    if (!subscription || !subscription.endpoint || !subscription.keys) {
+      return res.status(400).json({ error: 'Invalid subscription object' });
+    }
+
+    saveSubscription(subscription, preferences);
+    console.log('[push] New subscription saved');
+    res.json({ success: true, message: 'Successfully subscribed to notifications' });
+  } catch (err) {
+    console.error('[push] Subscribe error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Unsubscribe from push notifications
+app.post('/api/notifications/unsubscribe', express.json(), (req, res) => {
+  try {
+    const { endpoint } = req.body;
+
+    if (!endpoint) {
+      return res.status(400).json({ error: 'Endpoint required' });
+    }
+
+    const removed = removeSubscription(endpoint);
+    res.json({
+      success: true,
+      message: removed ? 'Successfully unsubscribed' : 'Subscription not found'
+    });
+  } catch (err) {
+    console.error('[push] Unsubscribe error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Send a push notification to a specific subscription
+export async function sendPushNotification(subscription, payload) {
+  try {
+    await webpush.sendNotification(subscription, JSON.stringify(payload));
+    return true;
+  } catch (err) {
+    console.error('[push] Send notification failed:', err.message);
+
+    // If subscription is invalid/expired (410 Gone), remove it
+    if (err.statusCode === 410 || err.statusCode === 404) {
+      console.log('[push] Removing expired subscription');
+      removeSubscription(subscription.endpoint);
+    }
+
+    return false;
+  }
+}
 
 // Observation stations with current temps (for map overlay).
 // Preferred: ?bbox=minLat,minLon,maxLat,maxLon returns every reporting station in
@@ -448,6 +526,10 @@ app.use(express.static(join(__dirname, 'public')));
 
 app.listen(PORT, () => {
   console.log(`Weather dashboard on http://localhost:${PORT}`);
+
+  // Initialize push notification subscriptions table
+  initSubscriptionsTable();
+
   startRealtime();  // live pushes -> cache, DB, and SSE
   startCollector(); // periodic REST backstop, in case realtime drops
 
@@ -455,4 +537,10 @@ app.listen(PORT, () => {
   // then keep it warm so the map's Active Alerts always load instantly.
   refreshAlerts().catch((err) => console.warn('[alerts] initial build failed:', err.message));
   setInterval(() => refreshAlerts().catch(() => {}), ALERTS_TTL);
+
+  // Start the alert monitoring service (checks conditions every 5 minutes)
+  startAlertMonitor();
+
+  // Schedule daily weather summary at 7:00 AM
+  scheduleDailySummary();
 });

@@ -69,13 +69,62 @@ async function registerServiceWorker() {
   }
 }
 
+// Helper function to convert VAPID key
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding)
+    .replace(/\-/g, '+')
+    .replace(/_/g, '/');
+
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
 // Subscribe to push notifications
 async function subscribeToPush(registration) {
   try {
-    // For now, we'll use a simple notification system without a push server
-    // In production, you'd generate VAPID keys and set up a push service
-    console.log('[notifications] Push subscription ready');
-    return true;
+    // Get VAPID public key from server
+    const res = await fetch('/api/notifications/vapid-key');
+    const data = await res.json();
+
+    if (!data.available || !data.publicKey) {
+      console.warn('[notifications] Push notifications not configured on server');
+      return false;
+    }
+
+    // Subscribe to push manager
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(data.publicKey)
+    });
+
+    // Get current preferences
+    const prefs = getNotificationPrefs();
+
+    // Send subscription to server
+    const saveRes = await fetch('/api/notifications/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subscription: subscription.toJSON(),
+        preferences: prefs
+      })
+    });
+
+    const saveData = await saveRes.json();
+
+    if (saveData.success) {
+      console.log('[notifications] Push subscription saved successfully');
+      return true;
+    } else {
+      console.error('[notifications] Failed to save subscription:', saveData.error);
+      return false;
+    }
   } catch (error) {
     console.error('[notifications] Push subscription failed:', error);
     return false;
