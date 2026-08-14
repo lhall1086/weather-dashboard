@@ -190,17 +190,21 @@ app.get('/api/notifications/vapid-key', (req, res) => {
   res.json({ publicKey: VAPID_PUBLIC_KEY, available: true });
 });
 
-// Subscribe to push notifications
+// Subscribe to push notifications with location data
 app.post('/api/notifications/subscribe', express.json(), (req, res) => {
   try {
-    const { subscription, preferences } = req.body;
+    const { subscription, preferences, location } = req.body;
 
     if (!subscription || !subscription.endpoint || !subscription.keys) {
       return res.status(400).json({ error: 'Invalid subscription object' });
     }
 
-    saveSubscription(subscription, preferences);
-    console.log('[push] New subscription saved');
+    // Save subscription with optional location data
+    saveSubscription(subscription, preferences, location);
+
+    const locationInfo = location?.name || (location ? `${location.latitude?.toFixed(2)}, ${location.longitude?.toFixed(2)}` : 'default location');
+    console.log(`[push] New subscription saved for ${locationInfo}`);
+
     res.json({ success: true, message: 'Successfully subscribed to notifications' });
   } catch (err) {
     console.error('[push] Subscribe error:', err.message);

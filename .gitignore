@@ -9,3 +9,4 @@ npm-debug.log
 weather.db
 .DS_Store
 *.log
+VAPID KEYS.txt

@@ -1,7 +1,7 @@
 // Database management for push notification subscriptions
 import { db } from './db.js';
 
-// Create subscriptions table
+// Create subscriptions table with location data
 export function initSubscriptionsTable() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS push_subscriptions (
@@ -10,31 +10,62 @@ export function initSubscriptionsTable() {
       keys_p256dh TEXT NOT NULL,
       keys_auth TEXT NOT NULL,
       preferences TEXT NOT NULL,
+      latitude REAL,
+      longitude REAL,
+      location_name TEXT,
       created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
       last_alert_sent INTEGER DEFAULT 0
     )
   `);
-  console.log('[subscriptions] Table initialized');
+
+  // Add location columns to existing table if they don't exist (migration)
+  try {
+    db.exec(`ALTER TABLE push_subscriptions ADD COLUMN latitude REAL`);
+    console.log('[subscriptions] Added latitude column');
+  } catch (e) {
+    // Column already exists, ignore
+  }
+
+  try {
+    db.exec(`ALTER TABLE push_subscriptions ADD COLUMN longitude REAL`);
+    console.log('[subscriptions] Added longitude column');
+  } catch (e) {
+    // Column already exists, ignore
+  }
+
+  try {
+    db.exec(`ALTER TABLE push_subscriptions ADD COLUMN location_name TEXT`);
+    console.log('[subscriptions] Added location_name column');
+  } catch (e) {
+    // Column already exists, ignore
+  }
+
+  console.log('[subscriptions] Table initialized with location support');
 }
 
-// Save or update a subscription
-export function saveSubscription(subscription, preferences) {
+// Save or update a subscription with location data
+export function saveSubscription(subscription, preferences, location = null) {
   const stmt = db.prepare(`
-    INSERT OR REPLACE INTO push_subscriptions (endpoint, keys_p256dh, keys_auth, preferences)
-    VALUES (?, ?, ?, ?)
+    INSERT OR REPLACE INTO push_subscriptions
+    (endpoint, keys_p256dh, keys_auth, preferences, latitude, longitude, location_name)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
 
   stmt.run(
     subscription.endpoint,
     subscription.keys.p256dh,
     subscription.keys.auth,
-    JSON.stringify(preferences)
+    JSON.stringify(preferences),
+    location?.latitude || null,
+    location?.longitude || null,
+    location?.name || null
   );
 
-  console.log('[subscriptions] Subscription saved');
+  const locationStr = location?.name || `${location?.latitude?.toFixed(2)}, ${location?.longitude?.toFixed(2)}` || 'default station location';
+  console.log(`[subscriptions] Subscription saved for location: ${locationStr}`);
 }
 
-// Get all active subscriptions
+// Get all active subscriptions with location data
 export function getAllSubscriptions() {
   const stmt = db.prepare('SELECT * FROM push_subscriptions');
   const rows = stmt.all();
@@ -49,6 +80,11 @@ export function getAllSubscriptions() {
       }
     },
     preferences: JSON.parse(row.preferences),
+    location: {
+      latitude: row.latitude,
+      longitude: row.longitude,
+      name: row.location_name
+    },
     lastAlertSent: row.last_alert_sent,
     createdAt: row.created_at
   }));

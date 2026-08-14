@@ -1,6 +1,16 @@
 # 🔔 Automated Weather Alert Notifications - Setup Guide
 
-This guide will help you set up the automated weather alert notification system that sends real-time push notifications to your users.
+This guide will help you set up the automated weather alert notification system that sends **location-based**, real-time push notifications to your users.
+
+## 🌍 **Location-Based Personalization**
+
+Each user gets alerts for **their specific location**! When users enable notifications:
+- Browser requests their GPS coordinates (with permission)
+- System stores their location
+- Alerts are based on **their local weather**, not yours
+- User in Birmingham gets Birmingham weather
+- User in Mobile gets Mobile weather
+- Truly personalized experience!
 
 ---
 

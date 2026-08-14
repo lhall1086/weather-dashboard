@@ -85,7 +85,59 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
-// Subscribe to push notifications
+// Get user's location with permission
+async function getUserLocation() {
+  return new Promise((resolve) => {
+    if (!('geolocation' in navigator)) {
+      console.warn('[notifications] Geolocation not supported');
+      resolve(null);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+
+        // Reverse geocode to get city/state name
+        try {
+          const res = await fetch(`https://api.weather.gov/points/${lat.toFixed(4)},${lon.toFixed(4)}`, {
+            headers: {
+              'User-Agent': 'local-weather-dashboard (contact: you@example.com)'
+            }
+          });
+          const data = await res.json();
+          const rel = data.properties?.relativeLocation?.properties;
+          const locationName = rel?.city && rel?.state ? `${rel.city}, ${rel.state}` : `${lat.toFixed(2)}, ${lon.toFixed(2)}`;
+
+          resolve({
+            latitude: lat,
+            longitude: lon,
+            name: locationName
+          });
+        } catch (err) {
+          console.warn('[notifications] Could not get location name:', err.message);
+          resolve({
+            latitude: lat,
+            longitude: lon,
+            name: `${lat.toFixed(2)}, ${lon.toFixed(2)}`
+          });
+        }
+      },
+      (error) => {
+        console.warn('[notifications] Location permission denied or unavailable:', error.message);
+        resolve(null);
+      },
+      {
+        enableHighAccuracy: false,
+        timeout: 10000,
+        maximumAge: 600000 // 10 minutes
+      }
+    );
+  });
+}
+
+// Subscribe to push notifications with user location
 async function subscribeToPush(registration) {
   try {
     // Get VAPID public key from server
@@ -103,16 +155,27 @@ async function subscribeToPush(registration) {
       applicationServerKey: urlBase64ToUint8Array(data.publicKey)
     });
 
+    // Get user's location
+    console.log('[notifications] Requesting location for personalized alerts...');
+    const location = await getUserLocation();
+
+    if (location) {
+      console.log(`[notifications] Location obtained: ${location.name}`);
+    } else {
+      console.log('[notifications] Using default station location for alerts');
+    }
+
     // Get current preferences
     const prefs = getNotificationPrefs();
 
-    // Send subscription to server
+    // Send subscription to server with location
     const saveRes = await fetch('/api/notifications/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         subscription: subscription.toJSON(),
-        preferences: prefs
+        preferences: prefs,
+        location: location
       })
     });
 
