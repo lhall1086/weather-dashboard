@@ -20,7 +20,6 @@ function dirLabel(deg) {
 // The tiles we render, in order. Each maps an AWN field to a label/unit/formatter.
 const TILE_DEFS = [
   { key: 'tempf',        label: 'Temperature', unit: '°F', digits: 1, hero: true },
-  { key: 'feelsLike',    label: 'Feels Like',  unit: '°F', digits: 1 },
   { key: 'humidity',     label: 'Humidity',    unit: '%',  digits: 0 },
   { key: 'dewPoint',     label: 'Dew Point',   unit: '°F', digits: 1 },
   { key: 'baromrelin',   label: 'Pressure',    unit: 'inHg', digits: 2 },
