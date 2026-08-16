@@ -25,7 +25,6 @@ const TILE_DEFS = [
   { key: 'dewPoint',     label: 'Dew Point',   unit: '°F', digits: 1 },
   { key: 'baromrelin',   label: 'Pressure',    unit: 'inHg', digits: 2 },
   { key: 'dailyrainin',  label: 'Rain Today',  unit: 'in', digits: 2 },
-  { key: 'uv',           label: 'UV Index',    unit: '',   digits: 0 },
   { key: 'solarradiation',label: 'Solar',      unit: 'W/m²', digits: 0 },
 ];
 
