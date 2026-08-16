@@ -86,11 +86,14 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.5rem;
+  gap: 0.4rem;
+  padding: 0.5rem 0.9rem;
   background: var(--accent);
   color: white;
   border: none;
   border-radius: var(--radius);
+  font-size: 0.85rem;
+  font-weight: 500;
   cursor: pointer;
   transition: background 0.2s, transform 0.1s;
 }
@@ -100,6 +103,9 @@ body {
 }
 .header-icon-btn svg {
   flex-shrink: 0;
+}
+.header-icon-btn span {
+  white-space: nowrap;
 }
 
 /* Share modal */
