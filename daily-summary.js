@@ -30,20 +30,51 @@ async function fetchForecastForLocation(lat, lon) {
     const forecastData = await forecastRes.json();
     const periods = forecastData.properties.periods || [];
 
-    // Convert to our 7-day format (group day/night periods)
+    if (periods.length === 0) {
+      throw new Error('No forecast periods available');
+    }
+
+    // Convert to our 7-day format (group day/night periods intelligently)
     const days = [];
-    for (let i = 0; i < periods.length; i += 2) {
-      const day = periods[i];
-      const night = periods[i + 1];
+
+    for (let i = 0; i < periods.length && days.length < 7; i++) {
+      const period = periods[i];
+      const nextPeriod = periods[i + 1];
+
+      // Determine high and low based on whether this is a day or night period
+      let highTemp, lowTemp, name, forecast;
+
+      if (period.isDaytime) {
+        // This is a daytime period (has the high temp)
+        name = period.name;
+        forecast = period.shortForecast;
+        highTemp = period.temperature;
+        lowTemp = nextPeriod && !nextPeriod.isDaytime ? nextPeriod.temperature : null;
+        i++; // Skip the next period since we've already processed it
+      } else {
+        // This is a nighttime period (has the low temp)
+        // Look for the next daytime period
+        if (nextPeriod && nextPeriod.isDaytime) {
+          name = nextPeriod.name;
+          forecast = nextPeriod.shortForecast;
+          highTemp = nextPeriod.temperature;
+          lowTemp = period.temperature;
+          i++; // Skip the next period since we've already processed it
+        } else {
+          // If no next daytime period, just use what we have
+          name = period.name;
+          forecast = period.shortForecast;
+          highTemp = null;
+          lowTemp = period.temperature;
+        }
+      }
 
       days.push({
-        name: day.name,
-        shortForecast: day.shortForecast,
-        highTemp: day.temperature,
-        lowTemp: night ? night.temperature : null
+        name: name,
+        shortForecast: forecast,
+        highTemp: highTemp,
+        lowTemp: lowTemp
       });
-
-      if (days.length >= 7) break;
     }
 
     return days;
@@ -139,16 +170,45 @@ export async function sendDailySummaries() {
       }
 
       if (!forecast || !forecast[0]) {
-        console.warn(`[daily-summary] No forecast available for subscription #${id}`);
+        console.warn(`[daily-summary] No forecast available for subscription #${id}, skipping`);
         continue;
       }
 
       const today = forecast[0];
-      const currentTempStr = currentTemp != null ? `, currently ${currentTemp}°F` : '';
+
+      // Log forecast data for debugging
+      console.log(`[daily-summary] Forecast for ${locationName}: ${today.name}, High: ${today.highTemp}, Low: ${today.lowTemp}, Current: ${currentTemp}`);
+
+      // Validate that we have at least some temperature data
+      if (today.highTemp == null && today.lowTemp == null && currentTemp == null) {
+        console.warn(`[daily-summary] No temperature data available for subscription #${id}, skipping`);
+        continue;
+      }
+
+      // Build temperature string with proper null handling
+      let tempStr = '';
+      if (today.highTemp != null && today.lowTemp != null) {
+        tempStr = `High: ${today.highTemp}°F, Low: ${today.lowTemp}°F`;
+      } else if (today.highTemp != null) {
+        tempStr = `High: ${today.highTemp}°F`;
+      } else if (today.lowTemp != null) {
+        tempStr = `Low: ${today.lowTemp}°F`;
+      } else if (currentTemp != null) {
+        // If we only have current temp, just use that
+        tempStr = `Currently ${currentTemp}°F`;
+      } else {
+        // This shouldn't happen due to the check above, but just in case
+        tempStr = 'Forecast available on website';
+      }
+
+      // Add current temp if we have it and it wasn't already included
+      const currentTempStr = (currentTemp != null && (today.highTemp != null || today.lowTemp != null))
+        ? `. Currently ${currentTemp}°F`
+        : '';
 
       const message = {
         title: `🌤️ Good Morning! Weather for ${locationName}`,
-        body: `${today.name}: ${today.shortForecast}. High: ${today.highTemp}°F${today.lowTemp ? `, Low: ${today.lowTemp}°F` : ''}${currentTempStr}`,
+        body: `${today.name}: ${today.shortForecast}. ${tempStr}${currentTempStr}`,
         icon: '/local-weather-lab-logo.png',
         badge: '/local-weather-lab-logo.png',
         tag: 'daily-summary',
@@ -169,22 +229,43 @@ export async function sendDailySummaries() {
   }
 }
 
-// Schedule daily summary at 7:00 AM local time
+// Schedule daily summary at 6:00 AM CST
 export function scheduleDailySummary() {
-  const now = new Date();
-  const scheduled = new Date();
-  scheduled.setHours(7, 0, 0, 0);
+  // Convert 6:00 AM CST to local server time
+  // CST is UTC-6, so 6:00 AM CST = 12:00 PM UTC (when not DST) or 11:00 AM UTC (during CDT)
+  // Since Render servers likely run on UTC, we need to calculate properly
 
-  // If already past 7 AM today, schedule for tomorrow
-  if (now > scheduled) {
+  const now = new Date();
+
+  // Create a date for 6:00 AM CST today
+  // We'll use toLocaleString to convert to CST timezone
+  const cstTimeString = now.toLocaleString('en-US', {
+    timeZone: 'America/Chicago',
+    hour12: false
+  });
+
+  // Parse current CST time
+  const cstNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
+
+  // Create next 6:00 AM CST
+  const scheduled = new Date(cstNow);
+  scheduled.setHours(6, 0, 0, 0);
+
+  // If already past 6 AM CST today, schedule for tomorrow
+  if (cstNow >= scheduled) {
     scheduled.setDate(scheduled.getDate() + 1);
   }
 
-  const timeUntil = scheduled - now;
+  // Convert back to server time for scheduling
+  const cstOffset = cstNow.getTime() - now.getTime();
+  const scheduledServerTime = new Date(scheduled.getTime() - cstOffset);
+
+  const timeUntil = scheduledServerTime - now;
   const hours = Math.floor(timeUntil / (60 * 60 * 1000));
   const minutes = Math.floor((timeUntil % (60 * 60 * 1000)) / (60 * 1000));
 
-  console.log(`[daily-summary] Next briefing scheduled in ${hours}h ${minutes}m at 7:00 AM`);
+  console.log(`[daily-summary] Next briefing scheduled in ${hours}h ${minutes}m at 6:00 AM CST`);
+  console.log(`[daily-summary] That's ${scheduledServerTime.toLocaleString('en-US', { timeZone: 'America/Chicago' })} CST`);
 
   setTimeout(() => {
     sendDailySummaries();
