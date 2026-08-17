@@ -3,7 +3,6 @@
 import { getAllSubscriptions, updateLastAlertSent } from './subscriptions-db.js';
 import { sendPushNotification } from './server.js';
 import { fetch7Day } from './nws.js';
-import { getLatest } from './db.js';
 
 const USER_AGENT = 'local-weather-dashboard (contact: you@example.com)';
 
@@ -37,7 +36,14 @@ async function fetchForecastForLocation(lat, lon) {
     // Convert to our 7-day format (group day/night periods intelligently)
     const days = [];
 
-    for (let i = 0; i < periods.length && days.length < 7; i++) {
+    // For daily morning summary: skip any nighttime periods at the start to ensure we get TODAY's forecast
+    let startIndex = 0;
+    if (periods.length > 0 && !periods[0].isDaytime) {
+      // First period is nighttime (e.g. "Tonight"), skip it to get today's daytime forecast
+      startIndex = 1;
+    }
+
+    for (let i = startIndex; i < periods.length && days.length < 7; i++) {
       const period = periods[i];
       const nextPeriod = periods[i + 1];
 
@@ -84,52 +90,13 @@ async function fetchForecastForLocation(lat, lon) {
   }
 }
 
-// Fetch current temperature for a location
-async function fetchCurrentTempForLocation(lat, lon) {
-  try {
-    const pointsRes = await fetch(`https://api.weather.gov/points/${lat.toFixed(4)},${lon.toFixed(4)}`, {
-      headers: { 'User-Agent': USER_AGENT, 'Accept': 'application/geo+json' }
-    });
-
-    if (!pointsRes.ok) throw new Error(`NWS points failed`);
-
-    const pointsData = await pointsRes.json();
-    const observationStations = pointsData.properties.observationStations;
-
-    const stationsRes = await fetch(observationStations, {
-      headers: { 'User-Agent': USER_AGENT, 'Accept': 'application/geo+json' }
-    });
-
-    if (!stationsRes.ok) throw new Error(`NWS stations failed`);
-
-    const stationsData = await stationsRes.json();
-    const nearestStation = stationsData.features && stationsData.features[0]?.id;
-
-    if (!nearestStation) throw new Error('No station found');
-
-    const obsRes = await fetch(`${nearestStation}/observations/latest`, {
-      headers: { 'User-Agent': USER_AGENT, 'Accept': 'application/geo+json' }
-    });
-
-    if (!obsRes.ok) throw new Error(`NWS observation failed`);
-
-    const obsData = await obsRes.json();
-    const tempC = obsData.properties?.temperature?.value;
-    const tempF = tempC != null ? Math.round((tempC * 9) / 5 + 32) : null;
-
-    return tempF;
-  } catch (err) {
-    return null;
-  }
-}
 
 // Send personalized daily summaries to all subscribed users
 export async function sendDailySummaries() {
   console.log('[daily-summary] Sending personalized morning weather briefings...');
 
   try {
-    // Get station data as fallback
-    const stationCurrent = getLatest();
+    // Get station forecast as fallback
     const stationForecast = await fetch7Day();
 
     // Get all subscriptions
@@ -146,7 +113,7 @@ export async function sendDailySummaries() {
         continue;
       }
 
-      let forecast, currentTemp, locationName;
+      let forecast, locationName;
 
       if (location && location.latitude && location.longitude) {
         // Fetch personalized forecast for user's location
@@ -154,18 +121,15 @@ export async function sendDailySummaries() {
         console.log(`[daily-summary] Fetching forecast for ${locationName}`);
 
         forecast = await fetchForecastForLocation(location.latitude, location.longitude);
-        currentTemp = await fetchCurrentTempForLocation(location.latitude, location.longitude);
 
         // Use station data as fallback if fetch failed
         if (!forecast && stationForecast) {
           forecast = stationForecast;
-          currentTemp = stationCurrent?.tempf;
           locationName = 'Montgomery, AL';
         }
       } else {
         // Use station data
         forecast = stationForecast;
-        currentTemp = stationCurrent?.tempf;
         locationName = 'Montgomery, AL';
       }
 
@@ -177,15 +141,15 @@ export async function sendDailySummaries() {
       const today = forecast[0];
 
       // Log forecast data for debugging
-      console.log(`[daily-summary] Forecast for ${locationName}: ${today.name}, High: ${today.highTemp}, Low: ${today.lowTemp}, Current: ${currentTemp}`);
+      console.log(`[daily-summary] Forecast for ${locationName}: ${today.name}, High: ${today.highTemp}, Low: ${today.lowTemp}`);
 
-      // Validate that we have at least some temperature data
-      if (today.highTemp == null && today.lowTemp == null && currentTemp == null) {
+      // Validate that we have at least high or low temperature data
+      if (today.highTemp == null && today.lowTemp == null) {
         console.warn(`[daily-summary] No temperature data available for subscription #${id}, skipping`);
         continue;
       }
 
-      // Build temperature string with proper null handling
+      // Build temperature string with proper null handling (no current temp)
       let tempStr = '';
       if (today.highTemp != null && today.lowTemp != null) {
         tempStr = `High: ${today.highTemp}°F, Low: ${today.lowTemp}°F`;
@@ -193,22 +157,14 @@ export async function sendDailySummaries() {
         tempStr = `High: ${today.highTemp}°F`;
       } else if (today.lowTemp != null) {
         tempStr = `Low: ${today.lowTemp}°F`;
-      } else if (currentTemp != null) {
-        // If we only have current temp, just use that
-        tempStr = `Currently ${currentTemp}°F`;
       } else {
         // This shouldn't happen due to the check above, but just in case
         tempStr = 'Forecast available on website';
       }
 
-      // Add current temp if we have it and it wasn't already included
-      const currentTempStr = (currentTemp != null && (today.highTemp != null || today.lowTemp != null))
-        ? `. Currently ${currentTemp}°F`
-        : '';
-
       const message = {
         title: `🌤️ Good Morning! Weather for ${locationName}`,
-        body: `${today.name}: ${today.shortForecast}. ${tempStr}${currentTempStr}`,
+        body: `${today.name}: ${today.shortForecast}. ${tempStr}`,
         icon: '/local-weather-lab-logo.png',
         badge: '/local-weather-lab-logo.png',
         tag: 'daily-summary',
