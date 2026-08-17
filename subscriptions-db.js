@@ -113,3 +113,17 @@ export function getSubscriptionCount() {
   const stmt = db.prepare('SELECT COUNT(*) as count FROM push_subscriptions');
   return stmt.get().count;
 }
+
+// Get new subscriptions in the last N days
+export function getNewSubscriptionsLastNDays(days = 7) {
+  const cutoff = Date.now() - (days * 24 * 60 * 60 * 1000);
+
+  const stmt = db.prepare(`
+    SELECT COUNT(*) as count
+    FROM push_subscriptions
+    WHERE created_at >= ?
+  `);
+
+  const result = stmt.get(cutoff);
+  return result.count || 0;
+}

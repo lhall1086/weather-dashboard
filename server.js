@@ -21,6 +21,8 @@ import webpush from 'web-push';
 import { initSubscriptionsTable, saveSubscription, removeSubscription } from './subscriptions-db.js';
 import { startAlertMonitor } from './alert-monitor.js';
 import { scheduleDailySummary } from './daily-summary.js';
+import { logVisit } from './visits-db.js';
+import { scheduleWeeklyReports } from './weekly-stats.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -525,6 +527,22 @@ app.get('/api/backfill', async (req, res) => {
   }
 });
 
+// Visitor tracking middleware (logs all page visits)
+app.use((req, res, next) => {
+  // Only track actual page visits (HTML files), not API calls or assets
+  if (req.path === '/' || req.path.endsWith('.html')) {
+    try {
+      const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || 'unknown';
+      const userAgent = req.headers['user-agent'] || 'unknown';
+      const referrer = req.headers['referer'] || req.headers['referrer'] || '';
+      logVisit(ip, userAgent, req.path, referrer);
+    } catch (err) {
+      console.warn('[server] Visitor tracking failed:', err.message);
+    }
+  }
+  next();
+});
+
 // Serve the dashboard.
 app.use(express.static(join(__dirname, 'public')));
 
@@ -547,4 +565,7 @@ app.listen(PORT, () => {
 
   // Schedule daily weather summary at 7:00 AM
   scheduleDailySummary();
+
+  // Schedule weekly analytics reports (every Monday at 7:00 AM CST)
+  scheduleWeeklyReports();
 });
