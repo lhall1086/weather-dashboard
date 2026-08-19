@@ -299,12 +299,15 @@
   <!-- 7. Active watches/warnings/advisories -->
   <section class="forecast-section">
     <div class="card">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
         <h2 style="margin: 0;">Active Alerts <small id="alert-location-label">(Montgomery, AL)</small></h2>
         <button id="location-toggle-btn" class="location-btn">
           📍 Use My Location
         </button>
       </div>
+      <p style="margin: 0 0 1rem 0; font-size: 0.8rem; color: var(--ink-dim); text-align: right;">
+        Tip: choose "Allow" (not "Allow once") so your browser remembers it and won't ask again.
+      </p>
       <div class="alerts-banner" id="alerts-banner" style="display:none;" aria-live="polite">
         <!-- injected by app.js when alerts exist -->
       </div>
