@@ -85,15 +85,43 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
-// Get user's location with permission
-async function getUserLocation() {
-  return new Promise((resolve) => {
-    if (!('geolocation' in navigator)) {
-      console.warn('[notifications] Geolocation not supported');
-      resolve(null);
-      return;
-    }
+// Cache the user's location so we don't have to re-prompt on every visit.
+const LOCATION_CACHE_KEY = 'weather-user-location';
 
+function getCachedLocation() {
+  try {
+    const saved = localStorage.getItem(LOCATION_CACHE_KEY);
+    return saved ? JSON.parse(saved) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function cacheLocation(loc) {
+  try {
+    localStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(loc));
+  } catch (e) {
+    // ignore storage errors
+  }
+}
+
+// Check the browser's current geolocation permission state without prompting.
+// Returns 'granted' | 'prompt' | 'denied' | 'unsupported'.
+async function queryGeolocationPermission() {
+  if (!navigator.permissions || !navigator.permissions.query) {
+    return 'unsupported';
+  }
+  try {
+    const status = await navigator.permissions.query({ name: 'geolocation' });
+    return status.state;
+  } catch (e) {
+    return 'unsupported';
+  }
+}
+
+// Actually request a fresh position from the browser (may show a prompt).
+function requestFreshPosition() {
+  return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const lat = position.coords.latitude;
@@ -110,23 +138,19 @@ async function getUserLocation() {
           const rel = data.properties?.relativeLocation?.properties;
           const locationName = rel?.city && rel?.state ? `${rel.city}, ${rel.state}` : `${lat.toFixed(2)}, ${lon.toFixed(2)}`;
 
-          resolve({
-            latitude: lat,
-            longitude: lon,
-            name: locationName
-          });
+          const loc = { latitude: lat, longitude: lon, name: locationName };
+          cacheLocation(loc);
+          resolve(loc);
         } catch (err) {
           console.warn('[notifications] Could not get location name:', err.message);
-          resolve({
-            latitude: lat,
-            longitude: lon,
-            name: `${lat.toFixed(2)}, ${lon.toFixed(2)}`
-          });
+          const loc = { latitude: lat, longitude: lon, name: `${lat.toFixed(2)}, ${lon.toFixed(2)}` };
+          cacheLocation(loc);
+          resolve(loc);
         }
       },
       (error) => {
         console.warn('[notifications] Location permission denied or unavailable:', error.message);
-        resolve(null);
+        resolve(getCachedLocation());
       },
       {
         enableHighAccuracy: false,
@@ -137,8 +161,38 @@ async function getUserLocation() {
   });
 }
 
-// Subscribe to push notifications with user location
-async function subscribeToPush(registration) {
+// Get user's location.
+// - On a background page load (allowPrompt = false), we only fetch a fresh
+//   position if the browser has ALREADY granted permission; otherwise we reuse
+//   the cached location. This prevents the location popup from re-appearing on
+//   every visit once a user has allowed it once.
+// - On an explicit user opt-in (allowPrompt = true), we go ahead and prompt.
+async function getUserLocation(allowPrompt = false) {
+  if (!('geolocation' in navigator)) {
+    console.warn('[notifications] Geolocation not supported');
+    return getCachedLocation();
+  }
+
+  const state = await queryGeolocationPermission();
+
+  if (state === 'granted') {
+    // Already granted — fetching a position will NOT show a popup.
+    return requestFreshPosition();
+  }
+
+  if (allowPrompt) {
+    // User just opted in — it's appropriate to prompt now.
+    return requestFreshPosition();
+  }
+
+  // Not granted and this is a background call — don't prompt, reuse cache.
+  return getCachedLocation();
+}
+
+// Subscribe to push notifications with user location.
+// allowPrompt should be true only when the user just opted in (an explicit
+// action), so we never trigger a location popup on a background page load.
+async function subscribeToPush(registration, allowPrompt = false) {
   try {
     // Get VAPID public key from server
     const res = await fetch('/api/notifications/vapid-key');
@@ -155,9 +209,9 @@ async function subscribeToPush(registration) {
       applicationServerKey: urlBase64ToUint8Array(data.publicKey)
     });
 
-    // Get user's location
-    console.log('[notifications] Requesting location for personalized alerts...');
-    const location = await getUserLocation();
+    // Get user's location (only prompts if allowed / already granted)
+    console.log('[notifications] Resolving location for personalized alerts...');
+    const location = await getUserLocation(allowPrompt);
 
     if (location) {
       console.log(`[notifications] Location obtained: ${location.name}`);
@@ -214,15 +268,18 @@ async function sendTestNotification() {
   };
 }
 
-// Initialize notifications
-async function initNotifications() {
+// Initialize notifications.
+// allowPrompt is false for the automatic on-load init (so returning visitors are
+// not re-prompted for location), and true when called right after the user
+// explicitly enables notifications.
+async function initNotifications(allowPrompt = false) {
   const prefs = getNotificationPrefs();
 
   // If user has enabled notifications, set up service worker
   if (prefs.enabled && supportsNotifications()) {
     const registration = await registerServiceWorker();
     if (registration) {
-      await subscribeToPush(registration);
+      await subscribeToPush(registration, allowPrompt);
     }
   }
 }

@@ -380,24 +380,50 @@ async function handleLocationToggle() {
   }
 }
 
+// Check the browser's current geolocation permission without prompting.
+// Returns 'granted' | 'prompt' | 'denied' | 'unsupported'.
+function queryGeolocationPermission() {
+  if (!navigator.permissions || !navigator.permissions.query) {
+    return Promise.resolve('unsupported');
+  }
+  return navigator.permissions.query({ name: 'geolocation' })
+    .then(status => status.state)
+    .catch(() => 'unsupported');
+}
+
 // Initialize location toggle button
 if ($('#location-toggle-btn')) {
   $('#location-toggle-btn').addEventListener('click', handleLocationToggle);
 
-  // If user previously selected their location, try to load it
+  // If the user previously selected their location, only auto-load it when the
+  // browser has ALREADY granted permission. Calling getCurrentPosition when the
+  // permission state is only 'prompt' would pop the location dialog on every
+  // visit — which is exactly the behavior we want to avoid.
   if (alertLocationMode === 'user') {
-    getUserLocation()
-      .then(location => {
-        userLocation = location;
-        $('#location-toggle-btn').textContent = '🏠 Show Station Alerts';
-        loadAlerts();
-      })
-      .catch(() => {
-        // Fall back to station mode if geolocation fails
+    queryGeolocationPermission().then((state) => {
+      if (state === 'granted') {
+        // Already granted — this resolves silently, no popup.
+        getUserLocation()
+          .then(location => {
+            userLocation = location;
+            $('#location-toggle-btn').textContent = '🏠 Show Station Alerts';
+            loadAlerts();
+          })
+          .catch(() => {
+            alertLocationMode = 'station';
+            localStorage.setItem('alertLocationMode', 'station');
+            $('#location-toggle-btn').textContent = '📍 Use My Location';
+            loadAlerts();
+          });
+      } else {
+        // 'prompt' / 'denied' / 'unsupported': don't auto-trigger a popup.
+        // Fall back to station alerts; the button lets them opt in with a click.
         alertLocationMode = 'station';
         localStorage.setItem('alertLocationMode', 'station');
+        $('#location-toggle-btn').textContent = '📍 Use My Location';
         loadAlerts();
-      });
+      }
+    });
   }
 }
 
@@ -1097,8 +1123,9 @@ notificationsEnabled?.addEventListener('change', async (e) => {
       return;
     }
 
-    // Initialize service worker
-    await window.weatherNotifications.init();
+    // Initialize service worker. Pass true so it's OK to prompt for location
+    // now — the user just explicitly opted in to notifications.
+    await window.weatherNotifications.init(true);
 
     notificationOptions.style.display = 'block';
   } else {
