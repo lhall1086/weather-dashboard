@@ -223,6 +223,35 @@ async function load7Day() {
 let alertLocationMode = localStorage.getItem('alertLocationMode') || 'station'; // 'station' or 'user'
 let userLocation = null;
 
+// Cache the user's coordinates so returning visitors don't have to press
+// "Use My Location" on every visit. This works even on browsers (like iOS
+// Safari) that don't support navigator.permissions.query for geolocation,
+// because we reuse the stored coordinates instead of relying on the
+// Permissions API or re-prompting.
+const USER_COORDS_KEY = 'weather-user-coords';
+
+function getCachedCoords() {
+  try {
+    const saved = localStorage.getItem(USER_COORDS_KEY);
+    if (!saved) return null;
+    const parsed = JSON.parse(saved);
+    if (typeof parsed.lat === 'number' && typeof parsed.lon === 'number') {
+      return parsed;
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function cacheCoords(coords) {
+  try {
+    localStorage.setItem(USER_COORDS_KEY, JSON.stringify({ lat: coords.lat, lon: coords.lon }));
+  } catch (e) {
+    // ignore storage errors
+  }
+}
+
 async function loadAlerts() {
   try {
     let alerts, locationLabel;
@@ -361,6 +390,7 @@ async function handleLocationToggle() {
 
     try {
       userLocation = await getUserLocation();
+      cacheCoords(userLocation); // remember for future visits (mobile-friendly)
       alertLocationMode = 'user';
       localStorage.setItem('alertLocationMode', 'user');
       btn.textContent = '🏠 Show Station Alerts';
@@ -395,35 +425,61 @@ function queryGeolocationPermission() {
 if ($('#location-toggle-btn')) {
   $('#location-toggle-btn').addEventListener('click', handleLocationToggle);
 
-  // If the user previously selected their location, only auto-load it when the
-  // browser has ALREADY granted permission. Calling getCurrentPosition when the
-  // permission state is only 'prompt' would pop the location dialog on every
-  // visit — which is exactly the behavior we want to avoid.
+  // If the user previously selected their location, restore it WITHOUT
+  // re-prompting. We rely on the coordinates we cached the first time they
+  // pressed "Use My Location" rather than the Permissions API — this is the
+  // key to working on mobile (iOS Safari doesn't support
+  // navigator.permissions.query for geolocation, so it would otherwise
+  // reset to station mode on every visit and force another button press).
   if (alertLocationMode === 'user') {
-    queryGeolocationPermission().then((state) => {
-      if (state === 'granted') {
-        // Already granted — this resolves silently, no popup.
-        getUserLocation()
-          .then(location => {
-            userLocation = location;
-            $('#location-toggle-btn').textContent = '🏠 Show Station Alerts';
-            loadAlerts();
-          })
-          .catch(() => {
-            alertLocationMode = 'station';
-            localStorage.setItem('alertLocationMode', 'station');
-            $('#location-toggle-btn').textContent = '📍 Use My Location';
-            loadAlerts();
-          });
-      } else {
-        // 'prompt' / 'denied' / 'unsupported': don't auto-trigger a popup.
-        // Fall back to station alerts; the button lets them opt in with a click.
-        alertLocationMode = 'station';
-        localStorage.setItem('alertLocationMode', 'station');
-        $('#location-toggle-btn').textContent = '📍 Use My Location';
-        loadAlerts();
-      }
-    });
+    const cached = getCachedCoords();
+
+    if (cached) {
+      // Use the remembered coordinates immediately — no popup, no click.
+      userLocation = cached;
+      $('#location-toggle-btn').textContent = '🏠 Show Station Alerts';
+      loadAlerts();
+
+      // If the browser reports permission is already granted, refresh the
+      // coordinates silently in the background (no popup) to keep them current.
+      queryGeolocationPermission().then((state) => {
+        if (state === 'granted') {
+          getUserLocation()
+            .then(location => {
+              userLocation = location;
+              cacheCoords(location);
+              loadAlerts();
+            })
+            .catch(() => { /* keep using cached coords */ });
+        }
+      });
+    } else {
+      // No cached coordinates yet. Only auto-load if permission is already
+      // granted (silent); otherwise fall back to station alerts so we never
+      // pop the location dialog on load. The button lets them opt in.
+      queryGeolocationPermission().then((state) => {
+        if (state === 'granted') {
+          getUserLocation()
+            .then(location => {
+              userLocation = location;
+              cacheCoords(location);
+              $('#location-toggle-btn').textContent = '🏠 Show Station Alerts';
+              loadAlerts();
+            })
+            .catch(() => {
+              alertLocationMode = 'station';
+              localStorage.setItem('alertLocationMode', 'station');
+              $('#location-toggle-btn').textContent = '📍 Use My Location';
+              loadAlerts();
+            });
+        } else {
+          alertLocationMode = 'station';
+          localStorage.setItem('alertLocationMode', 'station');
+          $('#location-toggle-btn').textContent = '📍 Use My Location';
+          loadAlerts();
+        }
+      });
+    }
   }
 }
 
