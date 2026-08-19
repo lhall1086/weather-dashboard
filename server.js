@@ -561,11 +561,24 @@ app.listen(PORT, () => {
   setInterval(() => refreshAlerts().catch(() => {}), ALERTS_TTL);
 
   // Start the alert monitoring service (checks conditions every 5 minutes)
-  startAlertMonitor();
+  try {
+    startAlertMonitor();
+  } catch (err) {
+    console.error('[server] Failed to start alert monitor:', err.message);
+  }
 
-  // Schedule daily weather summary at 7:00 AM
-  scheduleDailySummary();
+  // Schedule daily weather summary at 6:00 AM CST
+  try {
+    scheduleDailySummary();
+  } catch (err) {
+    console.error('[server] Failed to schedule daily summary:', err.message);
+  }
 
-  // Schedule weekly analytics reports (every Monday at 7:00 AM CST)
-  scheduleWeeklyReports();
+  // Schedule weekly analytics reports (every Monday at 7:00 AM CST).
+  // Non-critical: never let a failure here affect weather notifications.
+  try {
+    scheduleWeeklyReports();
+  } catch (err) {
+    console.error('[server] Failed to schedule weekly reports (non-critical):', err.message);
+  }
 });

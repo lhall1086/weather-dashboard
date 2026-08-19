@@ -35,7 +35,10 @@ async function startup() {
 
   // Start the main server FIRST (so Render sees open port)
   console.log('[startup] Starting server...');
-  import('./server.js');
+  import('./server.js').catch((err) => {
+    console.error('[startup] FATAL: server failed to start:', err.message);
+    console.error(err.stack);
+  });
 
   // Run backfill in background if needed (doesn't block server)
   if (needsBackfill) {
