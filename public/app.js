@@ -950,6 +950,145 @@ async function loadUV() {
   }
 }
 
+async function loadPollen() {
+  try {
+    const res = await fetch('/api/pollen');
+    const data = await res.json();
+
+    if (!data.available || !Array.isArray(data.types) || data.types.length === 0) {
+      $('#pollen-tile').style.display = 'none';
+      return;
+    }
+
+    $('#pollen-tile').style.display = 'block';
+    const rows = data.types
+      .map(
+        (t) => `
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-top: 0.3rem;">
+          <span>${t.label}</span>
+          <span class="pollen-pill" style="background: ${t.color}; color: ${t.textColor};">${t.category}</span>
+        </div>`
+      )
+      .join('');
+
+    $('#pollen-content').innerHTML = `
+      <div class="pollen-pill" style="background: ${data.overall.color}; color: ${data.overall.textColor}; font-size: 0.9rem;">
+        Overall: ${data.overall.category}
+      </div>
+      <div style="font-size: 0.8rem; margin-top: 0.5rem;">${rows}</div>
+    `;
+  } catch (err) {
+    console.warn('[pollen]', err.message);
+    $('#pollen-tile').style.display = 'none';
+  }
+}
+
+// ---- records & almanac (from our own station history) ----
+function loadAlmanac() {
+  fetch('/api/almanac')
+    .then((res) => res.json())
+    .then((data) => {
+      const grid = $('#almanac-grid');
+      const empty = $('#almanac-empty');
+      if (!data.available) {
+        $('#almanac-body').style.display = 'none';
+        empty.style.display = 'block';
+        return;
+      }
+      $('#almanac-body').style.display = 'block';
+      empty.style.display = 'none';
+
+      const fmtDate = (ymd) => {
+        if (!ymd) return '—';
+        const [y, m, d] = ymd.split('-');
+        return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      };
+      const t = (v, u = '°') => (v == null ? '—' : `${v}${u}`);
+
+      // Honest label for how much history the "records"/"normals" rest on.
+      const years = data.historyDays >= 700 ? `${Math.round(data.historyDays / 365)} yrs` : `${data.records.yearsObserved || 0} yr${data.records.yearsObserved === 1 ? '' : 's'} of records`;
+      $('#almanac-date').textContent = `(for ${fmtDate(data.date)})`;
+      $('#almanac-note').textContent = `Based on this station's data since ${fmtDate(new Date(data.historyStart).toISOString().slice(0, 10))} · ${years}`;
+
+      // Today vs normal high/low arrows.
+      const arrow = (val, normal) => {
+        if (val == null || normal == null) return '';
+        if (val > normal + 0.5) return ' <span style="color:#ff6b6b;">▲</span>';
+        if (val < normal - 0.5) return ' <span style="color:#4dabf7;">▼</span>';
+        return '';
+      };
+
+      const rec = data.records;
+      const today = data.todaySoFar || {};
+      const mtd = data.monthToDate || {};
+      const ex = data.extremes || {};
+
+      const tiles = [];
+
+      // Today so far vs the date's normal & record.
+      tiles.push(`
+        <div class="astro-tile">
+          <div class="astro-icon">🌡️</div>
+          <div class="astro-label">Today So Far</div>
+          <div class="astro-times">
+            <div>High <strong>${t(today.high)}</strong>${arrow(today.high, rec.normalHigh)} · Low <strong>${t(today.low)}</strong>${arrow(today.low, rec.normalLow)}</div>
+            <div style="font-size: 0.75rem; color: var(--ink-dim); margin-top: 0.3rem;">Normal: ${t(rec.normalHigh)} / ${t(rec.normalLow)}</div>
+          </div>
+        </div>`);
+
+      // Records for this date.
+      tiles.push(`
+        <div class="astro-tile">
+          <div class="astro-icon">🏆</div>
+          <div class="astro-label">Records for This Date</div>
+          <div class="astro-times">
+            <div>Record High <strong>${t(rec.high?.value)}</strong>${rec.high ? ` <span style="font-size:0.7rem;color:var(--ink-dim);">(${rec.high.year})</span>` : ''}</div>
+            <div>Record Low <strong>${t(rec.low?.value)}</strong>${rec.low ? ` <span style="font-size:0.7rem;color:var(--ink-dim);">(${rec.low.year})</span>` : ''}</div>
+          </div>
+        </div>`);
+
+      // On this day last year.
+      const ly = data.onThisDayLastYear;
+      tiles.push(`
+        <div class="astro-tile">
+          <div class="astro-icon">📅</div>
+          <div class="astro-label">On This Day Last Year</div>
+          <div class="astro-times">
+            ${ly ? `<div>High <strong>${t(ly.high)}</strong> · Low <strong>${t(ly.low)}</strong></div><div style="font-size:0.75rem;color:var(--ink-dim);margin-top:0.3rem;">${ly.year}</div>` : '<div style="color:var(--ink-dim);">No data yet</div>'}
+          </div>
+        </div>`);
+
+      // Month-to-date rainfall.
+      tiles.push(`
+        <div class="astro-tile">
+          <div class="astro-icon">🌧️</div>
+          <div class="astro-label">Month-to-Date Rain</div>
+          <div class="astro-times">
+            <div><strong>${t(mtd.current, '"')}</strong></div>
+            <div style="font-size:0.75rem;color:var(--ink-dim);margin-top:0.3rem;">${mtd.normal != null ? `Normal: ${t(mtd.normal, '"')}` : 'Normal: need more history'}</div>
+          </div>
+        </div>`);
+
+      // All-time extremes.
+      tiles.push(`
+        <div class="astro-tile">
+          <div class="astro-icon">📈</div>
+          <div class="astro-label">All-Time Extremes</div>
+          <div class="astro-times" style="font-size:0.82rem;">
+            <div>Hottest <strong>${t(ex.hottest?.value)}</strong> ${ex.hottest ? `<span style="font-size:0.7rem;color:var(--ink-dim);">${fmtDate(ex.hottest.date)}</span>` : ''}</div>
+            <div>Coldest <strong>${t(ex.coldest?.value)}</strong> ${ex.coldest ? `<span style="font-size:0.7rem;color:var(--ink-dim);">${fmtDate(ex.coldest.date)}</span>` : ''}</div>
+            <div>Wettest day <strong>${t(ex.wettest?.value, '"')}</strong> ${ex.wettest ? `<span style="font-size:0.7rem;color:var(--ink-dim);">${fmtDate(ex.wettest.date)}</span>` : ''}</div>
+            <div>Peak gust <strong>${t(ex.windiest?.value, ' mph')}</strong> ${ex.windiest ? `<span style="font-size:0.7rem;color:var(--ink-dim);">${fmtDate(ex.windiest.date)}</span>` : ''}</div>
+          </div>
+        </div>`);
+
+      grid.innerHTML = tiles.join('');
+    })
+    .catch((err) => {
+      console.warn('[almanac]', err.message);
+    });
+}
+
 // ---- boot ----
 // initMap() removed - using Weather.gov iframe embed instead of custom map
 startStream();       // live current conditions via SSE (falls back to polling on error)
@@ -963,6 +1102,8 @@ loadPrecip();
 loadAstronomy();
 loadAQI();
 loadUV();
+loadPollen();
+loadAlmanac();
 loadMonthlyCharts();
 loadHourly();
 loadTendency();
@@ -979,6 +1120,8 @@ setInterval(() => loadHistory(currentRange), REFRESH_MS * 5);
 setInterval(loadAstronomy, 60 * 60 * 1000); // sun/moon times refresh hourly (changes slowly)
 setInterval(loadAQI, 60 * 60 * 1000);       // AQI refreshes hourly
 setInterval(loadUV, 30 * 60 * 1000);        // UV refreshes every 30 min (changes throughout day)
+setInterval(loadPollen, 3 * 60 * 60 * 1000); // pollen refreshes every 3h (server caches 3h)
+setInterval(loadAlmanac, REFRESH_MS * 5);   // almanac refreshes with new station data
 setInterval(loadMonthlyCharts, REFRESH_MS * 5); // historical charts refresh every 5 min
 
 // Refresh the charts the moment the user returns to the tab.

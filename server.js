@@ -17,6 +17,8 @@ import { startRealtime, realtime } from './awn-realtime.js';
 import { getAstronomyData } from './astronomy.js';
 import { fetchAQI } from './aqi.js';
 import { fetchUVIndex } from './uv.js';
+import { fetchPollen } from './pollen.js';
+import { getAlmanac } from './almanac.js';
 import webpush from 'web-push';
 import { initSubscriptionsTable, saveSubscription, removeSubscription, getAllSubscriptions, getSubscriptionCount, updateSubscriptionPreferences, updateSubscriptionLocation } from './subscriptions-db.js';
 import { startAlertMonitor } from './alert-monitor.js';
@@ -178,6 +180,26 @@ app.get('/api/uv', async (req, res) => {
   try {
     const uv = await fetchUVIndex();
     res.json(uv || { available: false });
+  } catch (err) {
+    res.status(500).json({ error: err.message, available: false });
+  }
+});
+
+// Pollen / allergy forecast from Tomorrow.io. Requires POLLEN_API_KEY in .env.
+// Returns { available: false } if the key is missing or the API fails.
+app.get('/api/pollen', async (req, res) => {
+  try {
+    const pollen = await fetchPollen();
+    res.json(pollen || { available: false });
+  } catch (err) {
+    res.status(500).json({ error: err.message, available: false });
+  }
+});
+
+// Records & Almanac built from our own stored station history (no external API).
+app.get('/api/almanac', (req, res) => {
+  try {
+    res.json(getAlmanac());
   } catch (err) {
     res.status(500).json({ error: err.message, available: false });
   }
