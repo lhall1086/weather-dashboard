@@ -120,7 +120,7 @@ After deployment (about 5 minutes):
    ```
 
 2. **Visit Your Website**
-   - Open https://weather-dashboard-5hdo.onrender.com
+   - Open https://local-weather-lab.onrender.com
    - This will log a visit in the database
 
 3. **Check Server Logs for Visitor Tracking**
