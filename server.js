@@ -18,7 +18,7 @@ import { getAstronomyData } from './astronomy.js';
 import { fetchAQI } from './aqi.js';
 import { fetchUVIndex } from './uv.js';
 import webpush from 'web-push';
-import { initSubscriptionsTable, saveSubscription, removeSubscription, getAllSubscriptions, getSubscriptionCount, updateSubscriptionPreferences } from './subscriptions-db.js';
+import { initSubscriptionsTable, saveSubscription, removeSubscription, getAllSubscriptions, getSubscriptionCount, updateSubscriptionPreferences, updateSubscriptionLocation } from './subscriptions-db.js';
 import { startAlertMonitor } from './alert-monitor.js';
 import { scheduleDailySummary, sendDailySummaries } from './daily-summary.js';
 import { logVisit } from './visits-db.js';
@@ -227,6 +227,23 @@ app.post('/api/notifications/update-preferences', express.json(), (req, res) => 
     res.json({ success: true, updated });
   } catch (err) {
     console.error('[push] update-preferences error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update just the stored location for an existing subscription (matched by
+// endpoint). Called when we learn a subscriber's location after they've
+// subscribed, so their daily summary uses their own area, not the station.
+app.post('/api/notifications/update-location', express.json(), (req, res) => {
+  try {
+    const { endpoint, location } = req.body;
+    if (!endpoint || !location || location.latitude == null || location.longitude == null) {
+      return res.status(400).json({ error: 'endpoint and location {latitude, longitude} required' });
+    }
+    const updated = updateSubscriptionLocation(endpoint, location);
+    res.json({ success: true, updated });
+  } catch (err) {
+    console.error('[push] update-location error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

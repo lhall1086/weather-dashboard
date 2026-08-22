@@ -99,6 +99,25 @@ export function updateSubscriptionPreferences(endpoint, preferences) {
   return result.changes > 0;
 }
 
+// Update ONLY the stored location for an existing subscription (matched by
+// endpoint). Lets us attach a subscriber's location after they subscribed, so
+// their daily summary and alerts use their own area instead of the station.
+// Returns true if a row was updated.
+export function updateSubscriptionLocation(endpoint, location) {
+  const stmt = db.prepare(`
+    UPDATE push_subscriptions
+    SET latitude = ?, longitude = ?, location_name = ?
+    WHERE endpoint = ?
+  `);
+  const result = stmt.run(
+    location?.latitude ?? null,
+    location?.longitude ?? null,
+    location?.name ?? null,
+    endpoint
+  );
+  return result.changes > 0;
+}
+
 // Update last alert sent timestamp for a subscription
 export function updateLastAlertSent(subscriptionId) {
   const stmt = db.prepare('UPDATE push_subscriptions SET last_alert_sent = ? WHERE id = ?');

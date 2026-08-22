@@ -391,6 +391,11 @@ async function handleLocationToggle() {
     try {
       userLocation = await getUserLocation();
       cacheCoords(userLocation); // remember for future visits (mobile-friendly)
+      // If they're a push subscriber, personalize their daily summary / alerts
+      // to this location too (no-op if they aren't subscribed).
+      if (window.weatherNotifications && window.weatherNotifications.updateLocation) {
+        window.weatherNotifications.updateLocation(userLocation);
+      }
       alertLocationMode = 'user';
       localStorage.setItem('alertLocationMode', 'user');
       btn.textContent = '🏠 Show Station Alerts';

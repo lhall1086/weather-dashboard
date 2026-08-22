@@ -105,6 +105,26 @@ function cacheLocation(loc) {
   }
 }
 
+// The on-page "Use My Location" button (app.js) stores { lat, lon } under this
+// key. Reuse it as a location source for notifications so a subscriber who
+// picked their location for the alerts panel also gets a personalized daily
+// summary — no extra prompt needed.
+const ALERTS_COORDS_KEY = 'weather-user-coords';
+
+function getAlertsCoords() {
+  try {
+    const saved = localStorage.getItem(ALERTS_COORDS_KEY);
+    if (!saved) return null;
+    const p = JSON.parse(saved);
+    if (typeof p.lat === 'number' && typeof p.lon === 'number') {
+      return { latitude: p.lat, longitude: p.lon, name: null };
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
 // Check the browser's current geolocation permission state without prompting.
 // Returns 'granted' | 'prompt' | 'denied' | 'unsupported'.
 async function queryGeolocationPermission() {
@@ -273,6 +293,75 @@ async function syncPreferencesToServer(subscription) {
   }
 }
 
+// Resolve a location WITHOUT prompting: a fresh position if permission is
+// already granted, otherwise any cached location (from a previous
+// notifications prompt, or the on-page "Use My Location" button).
+async function resolveLocationNoPrompt() {
+  let loc = await getUserLocation(false); // never prompts
+  if (!loc || loc.latitude == null || loc.longitude == null) {
+    loc = getAlertsCoords();
+  }
+  return (loc && loc.latitude != null && loc.longitude != null) ? loc : null;
+}
+
+// Attach a location to the EXISTING push subscription on the server so daily
+// summaries and alerts use the subscriber's own area instead of the station.
+// Pass an explicit location, or let it resolve one silently (no prompt).
+async function syncLocationToServer(subscription, explicitLoc = null) {
+  const loc = explicitLoc || (await resolveLocationNoPrompt());
+  if (!loc) return false;
+
+  try {
+    const res = await fetch('/api/notifications/update-location', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: subscription.endpoint, location: loc })
+    });
+    const data = await res.json();
+    if (data.success) {
+      console.log('[notifications] Location synced to server for personalized forecast');
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.error('[notifications] Failed to sync location:', err);
+    return false;
+  }
+}
+
+// Public helper: push a location to the current subscription (if the user has
+// notifications enabled and is subscribed on this device). Called by the app
+// when the user presses "Use My Location". Accepts { latitude, longitude, name }
+// or { lat, lon }.
+async function updateSubscriptionLocation(loc) {
+  if (!supportsNotifications()) return false;
+  const prefs = getNotificationPrefs();
+  if (!prefs.enabled) return false;
+
+  try {
+    const registration = await navigator.serviceWorker.getRegistration();
+    if (!registration) return false;
+    const existing = await registration.pushManager.getSubscription();
+    if (!existing) return false;
+
+    // Normalize { lat, lon } (app.js shape) to { latitude, longitude }.
+    let normalized = null;
+    if (loc) {
+      const latitude = loc.latitude != null ? loc.latitude : loc.lat;
+      const longitude = loc.longitude != null ? loc.longitude : loc.lon;
+      if (latitude != null && longitude != null) {
+        normalized = { latitude, longitude, name: loc.name ?? null };
+        cacheLocation(normalized);
+      }
+    }
+
+    return await syncLocationToServer(existing, normalized);
+  } catch (err) {
+    console.error('[notifications] updateSubscriptionLocation failed:', err);
+    return false;
+  }
+}
+
 // Re-send the current preferences for the EXISTING push subscription to the
 // server. This is what makes preference changes actually take effect: without
 // it, toggling something like "Daily Forecast Summary" only updates
@@ -342,6 +431,9 @@ async function initNotifications(allowPrompt = false) {
       // changes — including ones made before this fix, or on another visit —
       // take effect on this visit. Cheap and never prompts for location.
       await syncPreferencesToServer(existing);
+      // Also attach their location if we can get it without prompting, so the
+      // daily summary uses their own area instead of the station.
+      await syncLocationToServer(existing);
     } else {
       // Not subscribed on this device yet — do the full subscribe (which also
       // resolves and stores location, prompting only if allowPrompt is true).
@@ -358,7 +450,8 @@ window.weatherNotifications = {
   requestPermission: requestNotificationPermission,
   sendTest: sendTestNotification,
   init: initNotifications,
-  resync: resyncPreferences
+  resync: resyncPreferences,
+  updateLocation: updateSubscriptionLocation
 };
 
 // Auto-initialize on load

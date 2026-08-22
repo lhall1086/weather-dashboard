@@ -19,6 +19,11 @@ async function fetchForecastForLocation(lat, lon) {
     const pointsData = await pointsRes.json();
     const forecastUrl = pointsData.properties.forecast;
 
+    // NWS gives us the nearest city/state here — use it to label the forecast
+    // even when we only have raw coordinates stored for the subscriber.
+    const rel = pointsData.properties.relativeLocation?.properties;
+    const resolvedName = rel?.city && rel?.state ? `${rel.city}, ${rel.state}` : null;
+
     // Get forecast
     const forecastRes = await fetch(forecastUrl, {
       headers: { 'User-Agent': USER_AGENT, 'Accept': 'application/geo+json' }
@@ -83,11 +88,24 @@ async function fetchForecastForLocation(lat, lon) {
       });
     }
 
-    return days;
+    return { days, resolvedName };
   } catch (err) {
     console.warn(`[daily-summary] Could not fetch forecast for ${lat}, ${lon}:`, err.message);
     return null;
   }
+}
+
+// Normalize a fetch7Day() day (station forecast) into the same shape the
+// per-location fetcher and sender use ({ name, shortForecast, highTemp,
+// lowTemp }). Without this, station-fallback subscribers get skipped because
+// their high/low temps read as undefined under the wrong field names.
+function toSummaryShape(day) {
+  return {
+    name: day.name,
+    shortForecast: day.dayConditions || day.nightConditions || day.shortForecast || '',
+    highTemp: day.high ?? day.highTemp ?? null,
+    lowTemp: day.low ?? day.lowTemp ?? null
+  };
 }
 
 
@@ -96,8 +114,12 @@ export async function sendDailySummaries() {
   console.log('[daily-summary] Sending personalized morning weather briefings...');
 
   try {
-    // Get station forecast as fallback
-    const stationForecast = await fetch7Day();
+    // Get station forecast as fallback, normalized to the summary shape so the
+    // temperature fields line up (fetch7Day uses high/low/dayConditions).
+    const rawStationForecast = await fetch7Day();
+    const stationForecast = Array.isArray(rawStationForecast)
+      ? rawStationForecast.map(toSummaryShape)
+      : null;
 
     // Get all subscriptions
     const subscriptions = getAllSubscriptions();
@@ -120,15 +142,20 @@ export async function sendDailySummaries() {
         locationName = location.name || `${location.latitude.toFixed(2)}, ${location.longitude.toFixed(2)}`;
         console.log(`[daily-summary] Fetching forecast for ${locationName}`);
 
-        forecast = await fetchForecastForLocation(location.latitude, location.longitude);
+        const result = await fetchForecastForLocation(location.latitude, location.longitude);
 
-        // Use station data as fallback if fetch failed
-        if (!forecast && stationForecast) {
+        if (result && result.days && result.days.length) {
+          forecast = result.days;
+          // If we only had coordinates on file (no name), use the city/state
+          // NWS resolved so the notification reads "Weather for City, ST".
+          if (!location.name && result.resolvedName) locationName = result.resolvedName;
+        } else if (stationForecast) {
+          // Personalized fetch failed — fall back to the station forecast.
           forecast = stationForecast;
           locationName = 'Montgomery, AL';
         }
       } else {
-        // Use station data
+        // No location on file — use the station (Montgomery) forecast.
         forecast = stationForecast;
         locationName = 'Montgomery, AL';
       }
