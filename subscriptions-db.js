@@ -90,6 +90,15 @@ export function getAllSubscriptions() {
   }));
 }
 
+// Update ONLY the preferences for an existing subscription (matched by
+// endpoint). Lets setting changes apply to existing subscribers on their next
+// visit without a full re-subscribe. Returns true if a row was updated.
+export function updateSubscriptionPreferences(endpoint, preferences) {
+  const stmt = db.prepare('UPDATE push_subscriptions SET preferences = ? WHERE endpoint = ?');
+  const result = stmt.run(JSON.stringify(preferences), endpoint);
+  return result.changes > 0;
+}
+
 // Update last alert sent timestamp for a subscription
 export function updateLastAlertSent(subscriptionId) {
   const stmt = db.prepare('UPDATE push_subscriptions SET last_alert_sent = ? WHERE id = ?');

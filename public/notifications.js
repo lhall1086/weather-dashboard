@@ -248,16 +248,40 @@ async function subscribeToPush(registration, allowPrompt = false) {
   }
 }
 
-// Re-send the current preferences (and cached location) for the EXISTING push
-// subscription to the server. This is what makes preference changes actually
-// take effect: without it, toggling something like "Daily Forecast Summary"
-// only updates localStorage, and the server keeps the stale preferences it was
-// given at subscribe time (dailySummary: false) — so the 6 AM loop skips the
-// user forever.
+// Update ONLY the preferences for an already-registered push subscription on
+// the server. No re-subscribe, no VAPID round-trip, and no location prompt —
+// this is the cheap, safe way to make the server's stored preferences match
+// what's in localStorage. Reads the current prefs from localStorage, so
+// callers must saveNotificationPrefs() BEFORE calling this.
+async function syncPreferencesToServer(subscription) {
+  try {
+    const prefs = getNotificationPrefs();
+    const res = await fetch('/api/notifications/update-preferences', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: subscription.endpoint, preferences: prefs })
+    });
+    const data = await res.json();
+    if (data.success) {
+      console.log('[notifications] Preferences synced to server');
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.error('[notifications] Failed to sync preferences:', err);
+    return false;
+  }
+}
+
+// Re-send the current preferences for the EXISTING push subscription to the
+// server. This is what makes preference changes actually take effect: without
+// it, toggling something like "Daily Forecast Summary" only updates
+// localStorage and the server keeps the stale preferences it was given at
+// subscribe time (dailySummary: false) — so the 6 AM loop skips the user.
 //
-// allowPrompt is always false here: a preference change must never trigger a
-// location popup. subscribeToPush reads the current prefs from localStorage,
-// so callers must saveNotificationPrefs() BEFORE calling this.
+// Never prompts for location. If there's already a push subscription we do a
+// lightweight preferences-only update; if there isn't one yet (e.g. the user
+// just enabled notifications) we fall back to a full subscribe.
 async function resyncPreferences() {
   const prefs = getNotificationPrefs();
   if (!prefs.enabled || !supportsNotifications()) return false;
@@ -268,6 +292,10 @@ async function resyncPreferences() {
       (await registerServiceWorker());
     if (!registration) return false;
 
+    const existing = await registration.pushManager.getSubscription();
+    if (existing) {
+      return await syncPreferencesToServer(existing);
+    }
     return await subscribeToPush(registration, false);
   } catch (err) {
     console.error('[notifications] Failed to resync preferences:', err);
@@ -305,7 +333,18 @@ async function initNotifications(allowPrompt = false) {
   // If user has enabled notifications, set up service worker
   if (prefs.enabled && supportsNotifications()) {
     const registration = await registerServiceWorker();
-    if (registration) {
+    if (!registration) return;
+
+    const existing = await registration.pushManager.getSubscription();
+    if (existing) {
+      // Existing subscriber (this device already has a push subscription):
+      // push their current local settings to the server so any preference
+      // changes — including ones made before this fix, or on another visit —
+      // take effect on this visit. Cheap and never prompts for location.
+      await syncPreferencesToServer(existing);
+    } else {
+      // Not subscribed on this device yet — do the full subscribe (which also
+      // resolves and stores location, prompting only if allowPrompt is true).
       await subscribeToPush(registration, allowPrompt);
     }
   }

@@ -18,7 +18,7 @@ import { getAstronomyData } from './astronomy.js';
 import { fetchAQI } from './aqi.js';
 import { fetchUVIndex } from './uv.js';
 import webpush from 'web-push';
-import { initSubscriptionsTable, saveSubscription, removeSubscription, getAllSubscriptions, getSubscriptionCount } from './subscriptions-db.js';
+import { initSubscriptionsTable, saveSubscription, removeSubscription, getAllSubscriptions, getSubscriptionCount, updateSubscriptionPreferences } from './subscriptions-db.js';
 import { startAlertMonitor } from './alert-monitor.js';
 import { scheduleDailySummary, sendDailySummaries } from './daily-summary.js';
 import { logVisit } from './visits-db.js';
@@ -210,6 +210,23 @@ app.post('/api/notifications/subscribe', express.json(), (req, res) => {
     res.json({ success: true, message: 'Successfully subscribed to notifications' });
   } catch (err) {
     console.error('[push] Subscribe error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update just the preferences for an existing subscription (matched by
+// endpoint). Called on page load so setting changes apply to existing
+// subscribers on their next visit — no re-subscribe required.
+app.post('/api/notifications/update-preferences', express.json(), (req, res) => {
+  try {
+    const { endpoint, preferences } = req.body;
+    if (!endpoint || !preferences) {
+      return res.status(400).json({ error: 'endpoint and preferences required' });
+    }
+    const updated = updateSubscriptionPreferences(endpoint, preferences);
+    res.json({ success: true, updated });
+  } catch (err) {
+    console.error('[push] update-preferences error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
