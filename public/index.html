@@ -293,6 +293,22 @@
     </div>
   </section>
 
+  <!-- Records & Almanac (built from our own station history) -->
+  <section class="almanac-section">
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.5rem;">
+        <h2 style="margin: 0;">Records &amp; Almanac <small id="almanac-date"></small></h2>
+        <small id="almanac-note" style="color: var(--ink-dim);"></small>
+      </div>
+      <div id="almanac-body">
+        <div class="astro-grid" id="almanac-grid"></div>
+      </div>
+      <p id="almanac-empty" style="display: none; text-align: center; padding: 1rem; color: var(--ink-dim);">
+        Not enough station history yet to build the almanac.
+      </p>
+    </div>
+  </section>
+
   <!-- 6. SPC Severe Weather Outlook Timeline -->
   <section class="spc-section">
     <div class="card">
@@ -434,22 +450,6 @@
           </div>
         </a>
       </div>
-    </div>
-  </section>
-
-  <!-- 11b. Records & Almanac (built from our own station history) -->
-  <section class="almanac-section">
-    <div class="card">
-      <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.5rem;">
-        <h2 style="margin: 0;">Records &amp; Almanac <small id="almanac-date"></small></h2>
-        <small id="almanac-note" style="color: var(--ink-dim);"></small>
-      </div>
-      <div id="almanac-body">
-        <div class="astro-grid" id="almanac-grid"></div>
-      </div>
-      <p id="almanac-empty" style="display: none; text-align: center; padding: 1rem; color: var(--ink-dim);">
-        Not enough station history yet to build the almanac.
-      </p>
     </div>
   </section>
 
