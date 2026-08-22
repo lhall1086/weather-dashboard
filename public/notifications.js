@@ -248,6 +248,33 @@ async function subscribeToPush(registration, allowPrompt = false) {
   }
 }
 
+// Re-send the current preferences (and cached location) for the EXISTING push
+// subscription to the server. This is what makes preference changes actually
+// take effect: without it, toggling something like "Daily Forecast Summary"
+// only updates localStorage, and the server keeps the stale preferences it was
+// given at subscribe time (dailySummary: false) — so the 6 AM loop skips the
+// user forever.
+//
+// allowPrompt is always false here: a preference change must never trigger a
+// location popup. subscribeToPush reads the current prefs from localStorage,
+// so callers must saveNotificationPrefs() BEFORE calling this.
+async function resyncPreferences() {
+  const prefs = getNotificationPrefs();
+  if (!prefs.enabled || !supportsNotifications()) return false;
+
+  try {
+    const registration =
+      (await navigator.serviceWorker.getRegistration()) ||
+      (await registerServiceWorker());
+    if (!registration) return false;
+
+    return await subscribeToPush(registration, false);
+  } catch (err) {
+    console.error('[notifications] Failed to resync preferences:', err);
+    return false;
+  }
+}
+
 // Send a test notification
 async function sendTestNotification() {
   if (Notification.permission !== 'granted') {
@@ -291,7 +318,8 @@ window.weatherNotifications = {
   supports: supportsNotifications,
   requestPermission: requestNotificationPermission,
   sendTest: sendTestNotification,
-  init: initNotifications
+  init: initNotifications,
+  resync: resyncPreferences
 };
 
 // Auto-initialize on load

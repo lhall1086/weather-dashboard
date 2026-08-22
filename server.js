@@ -18,9 +18,9 @@ import { getAstronomyData } from './astronomy.js';
 import { fetchAQI } from './aqi.js';
 import { fetchUVIndex } from './uv.js';
 import webpush from 'web-push';
-import { initSubscriptionsTable, saveSubscription, removeSubscription } from './subscriptions-db.js';
+import { initSubscriptionsTable, saveSubscription, removeSubscription, getAllSubscriptions, getSubscriptionCount } from './subscriptions-db.js';
 import { startAlertMonitor } from './alert-monitor.js';
-import { scheduleDailySummary } from './daily-summary.js';
+import { scheduleDailySummary, sendDailySummaries } from './daily-summary.js';
 import { logVisit } from './visits-db.js';
 import { scheduleWeeklyReports } from './weekly-stats.js';
 
@@ -230,6 +230,60 @@ app.post('/api/notifications/unsubscribe', express.json(), (req, res) => {
     });
   } catch (err) {
     console.error('[push] Unsubscribe error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Diagnostics: shows why daily summaries may not be going out.
+// Read-only and returns only aggregate counts (no endpoints/keys/PII).
+app.get('/api/notifications/diagnostics', (req, res) => {
+  try {
+    const vapidConfigured = !!(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY && VAPID_SUBJECT);
+    const subs = getAllSubscriptions();
+
+    let dailyEnabled = 0;
+    let severeEnabled = 0;
+    let withLocation = 0;
+    for (const s of subs) {
+      const p = s.preferences || {};
+      if (p.dailySummary) dailyEnabled++;
+      if (p.severeWeather) severeEnabled++;
+      if (s.location && s.location.latitude != null && s.location.longitude != null) withLocation++;
+    }
+
+    res.json({
+      vapidConfigured,
+      totalSubscriptions: subs.length,
+      dailySummaryEnabled: dailyEnabled,
+      severeWeatherEnabled: severeEnabled,
+      withLocation,
+      note: dailyEnabled === 0
+        ? 'No subscriptions have dailySummary enabled — the 6 AM loop will skip everyone. Users must toggle "Daily Forecast Summary" ON (and it must reach the server).'
+        : `${dailyEnabled} subscription(s) will receive the 6 AM daily summary.`
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Manual trigger for the daily summary (for testing the full send pipeline).
+// Requires ?secret= matching ADMIN_SECRET (or BACKFILL_SECRET) in production.
+app.get('/api/notifications/send-daily-now', async (req, res) => {
+  const secret = process.env.ADMIN_SECRET || process.env.BACKFILL_SECRET;
+  if (process.env.NODE_ENV === 'production' && (!secret || req.query.secret !== secret)) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  try {
+    const count = getSubscriptionCount();
+    res.json({
+      status: 'started',
+      subscriptions: count,
+      message: 'Daily summary send triggered. Check server logs for [daily-summary] output.'
+    });
+    // Run after responding so the request doesn't hang on network sends.
+    sendDailySummaries().catch((err) => console.error('[manual-daily] Error:', err.message));
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });

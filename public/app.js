@@ -1139,6 +1139,14 @@ function saveNotificationPrefs() {
   };
 
   window.weatherNotifications.savePrefs(prefs);
+
+  // Propagate the change to the server. Without this, the server keeps the
+  // preferences captured at subscribe time (dailySummary: false), so toggling
+  // "Daily Forecast Summary" here would never actually reach the 6 AM sender.
+  // resync() reads the prefs we just saved to localStorage above.
+  if (prefs.enabled && window.weatherNotifications.resync) {
+    window.weatherNotifications.resync();
+  }
 }
 
 // Open notifications modal
