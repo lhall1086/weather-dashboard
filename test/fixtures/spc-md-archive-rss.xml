@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"> 
+  <channel>
+    <title>SPC Mesoscale Discussions</title>
+    <link>https://www.spc.noaa.gov/</link>
+    <description>Storm Prediction Center</description>
+    <language>en-us</language>
+    <copyright>None</copyright>
+    <managingEditor>spc.feedback@noaa.gov (spc.feedback@noaa.gov)</managingEditor>
+    <webMaster>spc.feedback@noaa.gov (spc.feedback@noaa.gov)</webMaster>
+    <pubDate>Fri, 09 Oct 2026 21:49:02 +0000</pubDate>
+    <lastBuildDate>Fri, 09 Oct 2026 21:49:02 +0000</lastBuildDate>
+    <rating>general</rating>
+    <docs>http://validator.w3.org/feed/rss2.html</docs>
+    <ttl>1</ttl>
+    <atom:link href="https://www.spc.noaa.gov/products/spcmdrss.xml" rel="self" type="application/rss+xml" />
+
+    <image>
+      <url>http://weather.gov/images/xml_logo.gif</url>
+      <title>SPC Mesoscale Discussions</title>
+      <link>https://www.spc.noaa.gov/</link>
+    </image>
+
+      <item>
+        <link>https://www.spc.noaa.gov/products/md/md2348.html</link>
+        <title>SPC MD 2348</title>
+        <description>MD 2348 CONCERNING SEVERE POTENTIAL...TORNADO WATCH LIKELY  FOR PORTIONS OF SOUTHEAST ALABAMA...THE FLORIDA
+        <![CDATA[<br /><a href="https://www.spc.noaa.gov/products/md/md2348.html"><img src="https://www.spc.noaa.gov/products/md/mcd2348.png" border="1" alt="MD 2348 Image" hspace="1" vspace="1" width="815" height="611" align="center" /></a><pre>
+
+Mesoscale Discussion 2348
+NWS Storm Prediction Center Norman OK
+1022 AM CDT Fri Oct 09 2026
+
+Areas affected...portions of southeast Alabama...the Florida
+Panhandle and southwest Georgia
+
+Concerning...Severe potential...Tornado Watch likely 
+
+Valid 091522Z - 091745Z
+
+Probability of Watch Issuance...95 percent
+
+SUMMARY...The tropical cyclone tornado risk will increase across the
+Florida Panhandle over the next few hours. With time, this risk will
+spread north/northeast into parts of southeast Alabama and southwest
+Georgia through evening. A tornado watch will be issued in the
+17-18z time frame.
+
+DISCUSSION...Northeasterly low-level winds are still present across
+the region in the vicinity of a stationary front draped across
+northern FL and the north-central Gulf Coast ahead of Hurricane
+Isaias. This boundary will lift northward across north FL and the
+Panhandle as the hurricane progresses toward the coast this
+afternoon. As this occurs, richer boundary layer moisture (mid to
+upper 70s F dewpoints) will overspread the coastal vicinity.
+Likewise, low-level winds will become more east/southeasterly as
+they also continue to increase in magnitude. This will result in
+enlarged, favorably curved low-level hodographs and increasing 0-1
+km SRH favorable for low-level rotation. As richer boundary layer
+moisture arrives, 0-3 km MLCAPE will also increase, supporting
+stronger updrafts and vertical motion within supercell storms
+contained in outer rain bands moving across the FL Peninsula. This
+trend has already been noted within a stronger rain band over the
+offshore waters to the south of the FL Panhandle and Big Bend
+vicinity.
+
+The tornado risk will increase across the FL Panhandle by early to
+mid afternoon, with the risk gradually spreading northward toward
+southeast AL/southwest GA this evening.
+
+..Leitman/Smith.. 10/09/2026
+
+...Please see www.spc.noaa.gov for graphic product...
+
+ATTN...WFO...TBW...JAX...TAE...MOB...
+
+LAT...LON   29838728 30228739 30618739 31338701 31458668 31628528
+            31478421 31328351 31048297 30818278 29498271 29128293
+            28928377 28858491 28968584 29358676 29838728 
+
+MOST PROBABLE PEAK TORNADO INTENSITY...85-110 MPH
+
+</pre>
+<a href="https://www.spc.noaa.gov/products/md/md2348.html">Read more</a>
+]]>
+        </description>
+        <pubDate>Fri, 09 Oct 2026 15:22:00 +0000</pubDate>
+        <guid isPermaLink="false">https://www.spc.noaa.gov/products/md/md2348.html/20261009</guid>
+      </item>
+
+      <item>
+        <link>https://www.spc.noaa.gov/products/md/md2334.html</link>
+        <title>SPC MD 2334</title>
+        <description>MD 2334 CONCERNING SEVERE POTENTIAL...WATCH UNLIKELY  FOR PORTIONS OF SOUTHEASTERN ARIZONA
+        <![CDATA[<br /><a href="https://www.spc.noaa.gov/products/md/md2334.html"><img src="https://www.spc.noaa.gov/products/md/mcd2334.png" border="1" alt="MD 2334 Image" hspace="1" vspace="1" width="815" height="611" align="center" /></a><pre>
+
+Mesoscale Discussion 2334
+NWS Storm Prediction Center Norman OK
+0326 PM CDT Tue Sep 29 2026
+
+Areas affected...portions of southeastern Arizona
+
+Concerning...Severe potential...Watch unlikely 
+
+Valid 292026Z - 292200Z
+
+Probability of Watch Issuance...5 percent
+
+SUMMARY...A severe gust or brief tornado may occur with one of the
+stronger storms this afternoon. The severe threat should remain
+sparse, with a WW issuance not anticipated.
+
+DISCUSSION...Clearing skies and boundary-layer heating/mixing ahead
+of a confluence zone, accompanying an approaching inverted surface
+trough, will support continued gradual convective intensification
+through the day. MRMS mosaic radar imagery has shown strengthening
+storms over eastern Pima to eastern Cochise counties over the past
+hours. With surface temperatures reaching 70+ F in spots, amid low
+60s F dewpoints, additional storm development is likely ahead of a
+developing 500 mb low over southeastern AZ. Buoyancy exceeds 500
+J/kg MLCAPE over this region, along with 40+ kts of effective bulk
+shear. Any of the stronger storms that can root into the boundary
+layer may become surface based and spawn either a brief tornado or
+severe gust. Given the expected isolated nature of the severe
+threat. A WW issuance is not expected.
+
+..Squitieri/Mosier.. 09/29/2026
+
+...Please see www.spc.noaa.gov for graphic product...
+
+ATTN...WFO...EPZ...TWC...
+
+LAT...LON   31610908 31310922 31250978 31241043 31231075 31291100
+            31461100 32221085 32721040 32980978 32990935 32750906
+            32220900 31610908 
+
+MOST PROBABLE PEAK TORNADO INTENSITY...UP TO 90 MPH
+MOST PROBABLE PEAK WIND GUST...UP TO 60 MPH
+
+</pre>
+<a href="https://www.spc.noaa.gov/products/md/md2334.html">Read more</a>
+]]>
+        </description>
+        <pubDate>Tue, 29 Sep 2026 20:26:00 +0000</pubDate>
+        <guid isPermaLink="false">https://www.spc.noaa.gov/products/md/md2334.html/20260929</guid>
+      </item>
+  </channel>
+</rss>

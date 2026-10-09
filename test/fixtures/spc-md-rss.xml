@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"> 
+  <channel>
+    <title>SPC Mesoscale Discussions</title>
+    <link>https://www.spc.noaa.gov/</link>
+    <description>Storm Prediction Center</description>
+    <language>en-us</language>
+    <copyright>None</copyright>
+    <managingEditor>spc.feedback@noaa.gov (spc.feedback@noaa.gov)</managingEditor>
+    <webMaster>spc.feedback@noaa.gov (spc.feedback@noaa.gov)</webMaster>
+    <pubDate>Fri, 09 Oct 2026 21:49:02 +0000</pubDate>
+    <lastBuildDate>Fri, 09 Oct 2026 21:49:02 +0000</lastBuildDate>
+    <rating>general</rating>
+    <docs>http://validator.w3.org/feed/rss2.html</docs>
+    <ttl>1</ttl>
+    <atom:link href="https://www.spc.noaa.gov/products/spcmdrss.xml" rel="self" type="application/rss+xml" />
+
+    <image>
+      <url>http://weather.gov/images/xml_logo.gif</url>
+      <title>SPC Mesoscale Discussions</title>
+      <link>https://www.spc.noaa.gov/</link>
+    </image> 
+
+      <item>
+        <link>https://www.spc.noaa.gov/products/md/md2350.html</link>
+        <title>SPC MD 2350</title>
+        <description>MD 2350 CONCERNING TORNADO WATCH 677... FOR THE FLORIDA PANHANDLE
+        <![CDATA[<br /><a href="https://www.spc.noaa.gov/products/md/md2350.html"><img src="https://www.spc.noaa.gov/products/md/mcd2350.png" border="1" alt="MD 2350 Image" hspace="1" vspace="1" width="815" height="611" align="center" /></a><pre>
+
+Mesoscale Discussion 2350
+NWS Storm Prediction Center Norman OK
+0448 PM CDT Fri Oct 09 2026
+
+Areas affected...The Florida Panhandle
+
+Concerning...Tornado Watch 677...
+
+Valid 092148Z - 092315Z
+
+The severe weather threat for Tornado Watch 677 continues.
+
+SUMMARY...The main tornado threat this evening will be near the
+coast as supercells east of the hurricane core interact with a
+surface warm front.
+
+DISCUSSION...Hurricane Isaias will make landfall this evening along
+the western FL Panhandle coast (see latest NHC advisories for
+details).  East of the inner hurricane core, broken bands of
+supercells will continue to spread northward into the FL Big Bend. 
+As the hurricane moves northward,  surface warm front will likewise
+make some northward progress, as evidenced by gradual increases in
+surface temperatures/dewpoints into the mid-upper 70s.  These
+surface conditions will contribute to surface-based buoyancy near
+and a little inland from the coast over the next few hours.  The VWP
+from KTLH shows a large, curved hodograph and estimated 0-1 km SRH
+has roughly doubled since 19z with largely streamwise vorticity in
+the low levels.  The greatest tornado threat will be with the broken
+convective bands/supercells moving northward into the FL Big Bend
+and interacting with the zone of strongest low-level shear along the
+warm front.
+
+Tornado Watch 677 is scheduled to expire at 01z, but will be
+replaced with a new watch by 00-01z.
+
+..Thompson.. 10/09/2026
+
+...Please see www.spc.noaa.gov for graphic product...
+
+ATTN...WFO...TBW...JAX...TAE...
+
+LAT...LON   29178211 29058244 29378299 29668420 29798490 29908506
+            30188503 30288468 30328426 30188368 29988298 29828247
+            29598214 29178211 
+
+MOST PROBABLE PEAK TORNADO INTENSITY...100-125 MPH
+
+</pre>
+<a href="https://www.spc.noaa.gov/products/md/md2350.html">Read more</a>
+]]>
+        </description>
+        <pubDate>Fri, 09 Oct 2026 21:49:06 +0000</pubDate>
+        <guid isPermaLink="false">https://www.spc.noaa.gov/products/md/md2350.html/20261009</guid>
+      </item>
+  </channel>
+</rss>

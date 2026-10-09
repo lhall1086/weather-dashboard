@@ -6,7 +6,8 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { fetchCurrent } from './awn.js';
 import { fetchForecast, fetchHourly, fetchAlerts, getLocationLabel, fetch7Day } from './nws.js';
-import { fetchOutlook } from './spc.js';
+import { fetchOutlook, fetchDiscussions } from './spc.js';
+import { fetchActiveStorms } from './nhc.js';
 import { computeIndices } from './indices.js';
 import { getStormTotal, getHourlyIntensity, getRecentRainfall } from './precip.js';
 import { fetchObservations, fetchNationwideObservations, fetchObservationsByBounds } from './observations.js';
@@ -112,6 +113,32 @@ app.get('/api/forecast/7day', async (req, res) => {
 app.get('/api/spc/outlook', async (req, res) => {
   try {
     res.json(await fetchOutlook());
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// SPC mesoscale discussions covering a point (?lat=&lon=, default: station). Cached 5 min.
+app.get('/api/spc/discussions', async (req, res) => {
+  const { lat, lon } = req.query;
+  if ((lat === undefined) !== (lon === undefined)) {
+    return res.status(400).json({ error: 'Pass both lat and lon, or neither' });
+  }
+  const point = lat === undefined ? [] : [Number(lat), Number(lon)];
+  if (point.some((v) => !Number.isFinite(v))) {
+    return res.status(400).json({ error: 'lat and lon must be numbers' });
+  }
+  try {
+    res.json({ discussions: await fetchDiscussions(...point) });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// NHC "Watches/Warnings Forecast Cone for Storm Center" graphics for active Atlantic storms. Cached 5 min.
+app.get('/api/nhc', async (req, res) => {
+  try {
+    res.json(await fetchActiveStorms());
   } catch (err) {
     res.status(502).json({ error: err.message });
   }

@@ -179,6 +179,11 @@ Three more data products strengthen the dashboard:
 1. **Active watches/warnings/advisories** — displayed as a banner at the top (hidden when none).
    Refreshed every 2 minutes. **Safety-critical** — a dashboard that misses a tornado warning
    is worse than no dashboard. Severity color-coded: Extreme (red) → Severe → Moderate → Minor.
+   Click any alert to expand the full NWS text (what/where/when/impacts, what to do, areas,
+   times, issuing office). Active **SPC mesoscale discussions** covering the station (or the
+   visitor's location) appear in the same list (purple), with SPC's full text and map.
+   Below it, while an Atlantic storm is active, the **NHC "Watches/Warnings Forecast Cone for
+   Storm Center"** graphic appears and swaps in NHC's newest graphic automatically.
 
 2. **Hourly forecast** (next 24h) — NWS gridpoint hourly forecast: temp, precip %, humidity, wind.
    Denser near-term view than the 12h day/night periods. Refreshed hourly.
@@ -245,6 +250,8 @@ the longer it runs.
 | `GET /api/forecast` | NWS 12h day/night forecast (cached 1h) |
 | `GET /api/forecast/hourly?limit=24` | NWS hourly forecast (cached 1h) |
 | `GET /api/alerts` | Active watches/warnings/advisories (cached 2 min) |
+| `GET /api/spc/discussions?lat=&lon=` | Active SPC mesoscale discussions covering a point; default is the station (cached 5 min) |
+| `GET /api/nhc` | Active Atlantic storms with NHC's current forecast cone graphic (cached 5 min) |
 
 ## Notes & gotchas
 

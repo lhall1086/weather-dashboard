@@ -10,6 +10,14 @@ let currentRange = '24h';
 const $ = (sel) => document.querySelector(sel);
 const fmt = (v, digits = 0) => (v === null || v === undefined || Number.isNaN(v) ? '—' : Number(v).toFixed(digits));
 
+// Escape text from outside sources (NWS, SPC, NHC) before putting it into HTML.
+const escapeHTML = (s) =>
+  String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+// "Fri, Oct 9, 4:52 PM CDT" in the visitor's time zone.
+const fmtTime = (iso) =>
+  new Date(iso).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
+
 // Convert a wind bearing in degrees to a compass label (N, NNE, ...).
 function dirLabel(deg) {
   if (deg === null || deg === undefined) return '—';
@@ -252,11 +260,76 @@ function cacheCoords(coords) {
   }
 }
 
+// Key that stays the same across NWS updates of one event (VTEC office.phenomenon.significance.number),
+// so an expanded alert stays open when NWS updates it. Falls back to the NWS ID.
+function alertKey(a) {
+  const vtec = (a.vtec || [])[0];
+  return vtec ? vtec.split('.').slice(2, 6).join('.') : a.id || `${a.event}|${a.headline}`;
+}
+
+// One NWS alert: click to expand the full NWS text.
+function alertItemHTML(a, isOpen) {
+  const meta = [
+    a.areaDesc && ['Areas', a.areaDesc],
+    a.onset && ['Starts', fmtTime(a.onset)],
+    a.ends && ['Ends', fmtTime(a.ends)],
+    a.senderName && ['Issued by', a.senderName],
+  ].filter(Boolean);
+  return `
+    <details class="alert-item ${escapeHTML(a.severity)}" data-key="${escapeHTML(alertKey(a))}"${isOpen ? ' open' : ''}>
+      <summary>
+        <div class="event">${escapeHTML(a.event)}</div>
+        <div class="headline">${escapeHTML(a.headline)}</div>
+      </summary>
+      <div class="alert-body">
+        ${a.description ? `<div class="alert-text">${escapeHTML(a.description)}</div>` : ''}
+        ${a.instruction ? `<div class="alert-section-title">What to do</div><div class="alert-text">${escapeHTML(a.instruction)}</div>` : ''}
+        <dl class="alert-meta">${meta.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHTML(v)}</dd>`).join('')}</dl>
+      </div>
+    </details>`;
+}
+
+// One SPC mesoscale discussion: click to expand the full SPC text and map.
+function discussionItemHTML(md, isOpen) {
+  const link = (text) => `<a href="${escapeHTML(md.url)}" target="_blank" rel="noopener">${text}</a>`;
+  return `
+    <details class="alert-item discussion" data-key="${escapeHTML(md.id)}"${isOpen ? ' open' : ''}>
+      <summary>
+        <div class="event">SPC ${escapeHTML(md.title)}</div>
+        <div class="headline">${escapeHTML(md.concerning)} — ${escapeHTML(md.areasAffected)}</div>
+      </summary>
+      <div class="alert-body">
+        ${md.imageUrl ? link(`<img class="md-image" src="${escapeHTML(md.imageUrl)}" alt="Map of the area covered by ${escapeHTML(md.title)}" loading="lazy">`) : ''}
+        <div class="alert-text">${escapeHTML(md.text)}</div>
+        <dl class="alert-meta">
+          ${md.validUntil ? `<dt>Valid until</dt><dd>${escapeHTML(fmtTime(md.validUntil))}</dd>` : ''}
+          <dt>Source</dt><dd>${link('Storm Prediction Center')}</dd>
+        </dl>
+      </div>
+    </details>`;
+}
+
+// SPC mesoscale discussions covering the station (coords = null) or the visitor's location.
+// Non-critical: on failure the panel still shows the NWS alerts.
+async function fetchDiscussions(coords) {
+  try {
+    const qs = coords ? `?lat=${coords.lat}&lon=${coords.lon}` : '';
+    const res = await fetch(`/api/spc/discussions${qs}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()).discussions || [];
+  } catch (err) {
+    console.warn('[discussions]', err.message);
+    return [];
+  }
+}
+
 async function loadAlerts() {
   try {
     let alerts, locationLabel;
+    const userMode = alertLocationMode === 'user' && userLocation;
+    const discussionsPromise = fetchDiscussions(userMode ? userLocation : null);
 
-    if (alertLocationMode === 'user' && userLocation) {
+    if (userMode) {
       // Fetch alerts for user's location
       const result = await fetchAlertsForLocation(userLocation.lat, userLocation.lon);
       alerts = result.alerts;
@@ -278,25 +351,25 @@ async function loadAlerts() {
       locationLabelEl.textContent = `(${locationLabel})`;
     }
 
-    if (!alerts || alerts.length === 0) {
+    const discussions = await discussionsPromise;
+    alerts = alerts || [];
+
+    if (alerts.length === 0 && discussions.length === 0) {
       banner.style.display = 'none';
       noAlertsMsg.style.display = 'block';
+      noAlertsMsg.textContent = 'No active alerts for this area';
       return;
     }
 
+    // Keep expanded items open across the 2-minute refresh.
+    const open = new Set([...banner.querySelectorAll('details[open]')].map((d) => d.dataset.key));
+
     banner.style.display = 'block';
     noAlertsMsg.style.display = 'none';
-    banner.innerHTML = alerts
-      .map((a) => {
-        const instruction = a.instruction ? `<div class="instruction">${a.instruction}</div>` : '';
-        return `
-        <div class="alert-item ${a.severity}">
-          <div class="event">${a.event}</div>
-          <div class="headline">${a.headline}</div>
-          ${instruction}
-        </div>`;
-      })
-      .join('');
+    banner.innerHTML = [
+      ...alerts.map((a) => alertItemHTML(a, open.has(alertKey(a)))),
+      ...discussions.map((md) => discussionItemHTML(md, open.has(md.id))),
+    ].join('');
   } catch (err) {
     console.warn('[alerts]', err.message);
     const banner = $('#alerts-banner');
@@ -323,11 +396,17 @@ async function fetchAlertsForLocation(lat, lon) {
 
     // Parse alerts
     const alerts = features.map(f => ({
+      id: f.properties.id,
       event: f.properties.event,
       severity: f.properties.severity,
       headline: f.properties.headline,
       instruction: f.properties.instruction,
-      description: f.properties.description
+      description: f.properties.description,
+      areaDesc: f.properties.areaDesc,
+      onset: f.properties.onset,
+      ends: f.properties.ends,
+      senderName: f.properties.senderName,
+      vtec: f.properties.parameters?.VTEC || []
     }));
 
     // Get location name from reverse geocoding
@@ -485,6 +564,50 @@ if ($('#location-toggle-btn')) {
         }
       });
     }
+  }
+}
+
+// ---- NHC forecast cone (active Atlantic storms) ----
+// NHC gives every new cone graphic a new URL, so re-checking /api/nhc every
+// 5 minutes swaps in the latest graphic without a page reload.
+let lastNHCRender = '';
+
+function stormHTML(s) {
+  const advisory = [
+    s.advisoryNumber && `Advisory ${String(s.advisoryNumber).replace(/^0+(?=\d)/, '')}`,
+    s.issuance && fmtTime(s.issuance),
+  ].filter(Boolean).join(' · ');
+  const page = escapeHTML(s.graphicsPageUrl);
+  const graphic = s.coneImageUrl
+    ? `<a href="${page}" target="_blank" rel="noopener"><img class="nhc-cone" src="${escapeHTML(s.coneImageUrl)}" alt="NHC watches/warnings forecast cone for ${escapeHTML(s.label)}"></a>`
+    : `<p class="nhc-missing">The latest cone graphic couldn't be loaded here. <a href="${page}" target="_blank" rel="noopener">View it on the NHC website</a>.</p>`;
+  return `
+    <div class="nhc-storm">
+      <h3>${escapeHTML(s.label)} <small>${escapeHTML(advisory)}</small></h3>
+      <div class="nhc-graphic-title">Watches/Warnings Forecast Cone for Storm Center</div>
+      ${graphic}
+    </div>`;
+}
+
+async function loadNHC() {
+  try {
+    const res = await fetch('/api/nhc');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const { storms = [] } = await res.json();
+
+    if (storms.length === 0) {
+      $('#nhc-section').style.display = 'none';
+      lastNHCRender = '';
+      return;
+    }
+
+    const html = storms.map(stormHTML).join('');
+    if (html === lastNHCRender) return; // same graphic(s): don't reload the images
+    lastNHCRender = html;
+    $('#nhc-storms').innerHTML = html;
+    $('#nhc-section').style.display = 'block';
+  } catch (err) {
+    console.warn('[nhc]', err.message); // keep showing the last graphic
   }
 }
 
@@ -1097,6 +1220,7 @@ loadBriefing();
 loadSPCOutlook();
 load7Day();
 loadAlerts();
+loadNHC();
 loadIndices();
 loadPrecip();
 loadAstronomy();
@@ -1112,6 +1236,7 @@ setInterval(loadBriefing, 60 * 60 * 1000);  // briefing refreshes hourly
 setInterval(loadSPCOutlook, 30 * 60 * 1000); // SPC outlook refreshes every 30 min
 setInterval(load7Day, 60 * 60 * 1000);      // 7-day refreshes hourly
 setInterval(loadAlerts, 2 * 60 * 1000);     // alerts refresh every 2 min (time-sensitive)
+setInterval(loadNHC, 5 * 60 * 1000);        // NHC cone: picks up a new graphic within ~10 min (server caches 5 min)
 setInterval(loadIndices, REFRESH_MS);       // indices refresh with new station data
 setInterval(loadPrecip, REFRESH_MS);        // precip analysis refreshes with new station data
 setInterval(loadHourly, 60 * 60 * 1000);    // hourly forecast refresh every hour
