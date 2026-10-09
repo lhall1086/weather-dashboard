@@ -1,11 +1,12 @@
 // Alert monitoring service - Per-user location-based alerts
 // Checks weather conditions for each user's specific location and sends personalized notifications
-import { getAllSubscriptions, updateLastAlertSent } from './subscriptions-db.js';
+import { getAllSubscriptions, updateLastAlertSent, hasAlertBeenSent, markAlertSent, pruneSentAlerts } from './subscriptions-db.js';
 import { sendPushNotification } from './server.js';
 import { getLatest } from './db.js';
 
 const USER_AGENT = 'local-weather-dashboard (contact: you@example.com)';
-const MIN_ALERT_INTERVAL = 15 * 60 * 1000; // 15 minutes
+const MIN_ALERT_INTERVAL = 15 * 60 * 1000; // 15 minutes (temperature/wind/rain alerts)
+const SENT_ALERT_RETENTION = 14 * 24 * 60 * 60 * 1000; // forget pushed NWS alert IDs after 14 days
 
 // Fetch weather data for a specific location from NWS
 async function fetchWeatherForLocation(lat, lon) {
@@ -89,7 +90,11 @@ async function fetchAlertsForLocation(lat, lon) {
     const alerts = data.features || [];
 
     return alerts.map(feature => ({
+      id: feature.properties.id,
       event: feature.properties.event,
+      status: feature.properties.status,
+      messageType: feature.properties.messageType,
+      vtec: feature.properties.parameters?.VTEC || [],
       headline: feature.properties.headline,
       description: feature.properties.description
     }));
@@ -97,6 +102,64 @@ async function fetchAlertsForLocation(lat, lon) {
     console.warn(`[alert-monitor] Could not fetch alerts for ${lat}, ${lon}:`, err.message);
     return [];
   }
+}
+
+// NWS alert types that are pushed (exact NWS `event` names). Statements,
+// advisories, outlooks and discussions are never pushed.
+const PUSH_ALERT_EVENTS = new Set([
+  'Tornado Watch', 'Tornado Warning',
+  'Severe Thunderstorm Watch', 'Severe Thunderstorm Warning',
+  'Flood Watch', 'Flood Warning',
+  'Flash Flood Watch', 'Flash Flood Warning',
+  'Coastal Flood Watch', 'Coastal Flood Warning',
+  'Lakeshore Flood Watch', 'Lakeshore Flood Warning',
+  'Tropical Storm Watch', 'Tropical Storm Warning',
+  'Hurricane Watch', 'Hurricane Warning',
+]);
+
+// VTEC actions that only announce an alert is ending. NWS sometimes sends these
+// as messageType "Alert", so messageType alone doesn't catch them.
+const ENDING_VTEC_ACTIONS = new Set(['CAN', 'EXP']);
+
+// True for a listed watch/warning that was just issued or updated; false for
+// cancellations and "will expire" notices.
+function isPushableAlert(alert) {
+  if (alert.status !== 'Actual') return false;
+  if (!PUSH_ALERT_EVENTS.has(alert.event)) return false;
+  if (alert.messageType !== 'Alert' && alert.messageType !== 'Update') return false;
+  // VTEC strings look like "/O.CON.KBMX.FA.A.0009.261010T0000Z-261011T1200Z/" (action = 2nd field)
+  const actions = (alert.vtec || []).map((v) => v.split('.')[1]);
+  return !(actions.length > 0 && actions.every((a) => ENDING_VTEC_ACTIONS.has(a)));
+}
+
+// Push each alert to one subscriber; returns how many were delivered.
+// Watch/warning alerts carry nwsAlertId and are recorded so they never repeat.
+async function sendAlerts({ subscription, id }, locationName, alerts) {
+  if (alerts.length === 0) return 0;
+  console.log(`[alert-monitor] Sending ${alerts.length} alert(s) to subscription #${id} (${locationName})`);
+
+  let sentCount = 0;
+  for (const alert of alerts) {
+    const payload = {
+      title: alert.title,
+      body: alert.body,
+      icon: '/local-weather-lab-logo.png',
+      badge: '/local-weather-lab-logo.png',
+      tag: alert.tag,
+      requireInteraction: alert.requireInteraction || false,
+      data: alert.data,
+      url: alert.data.url
+    };
+
+    const sent = await sendPushNotification(subscription, payload);
+
+    if (sent) {
+      if (alert.nwsAlertId) markAlertSent(id, alert.nwsAlertId);
+      updateLastAlertSent(id);
+      sentCount++;
+    }
+  }
+  return sentCount;
 }
 
 // Check all subscriptions and send location-based alerts
@@ -116,15 +179,16 @@ export async function checkAndSendAlerts() {
       return;
     }
 
+    pruneSentAlerts(SENT_ALERT_RETENTION);
+
     let alertsSent = 0;
 
     for (const sub of subscriptions) {
-      const { subscription, preferences, location, id, lastAlertSent } = sub;
+      const { preferences, location, id, lastAlertSent } = sub;
 
-      // Don't spam users - respect minimum interval
-      if (Date.now() - lastAlertSent < MIN_ALERT_INTERVAL) {
-        continue;
-      }
+      // Temperature/wind/rain alerts respect a minimum interval so they don't spam.
+      // Watches/warnings don't need it: each NWS message is pushed once, by ID.
+      const throttled = Date.now() - lastAlertSent < MIN_ALERT_INTERVAL;
 
       // Determine which weather data to use
       let currentWeather;
@@ -136,12 +200,14 @@ export async function checkAndSendAlerts() {
         locationName = location.name || `${location.latitude.toFixed(2)}, ${location.longitude.toFixed(2)}`;
         console.log(`[alert-monitor] Checking ${locationName} for subscription #${id}`);
 
-        currentWeather = await fetchWeatherForLocation(location.latitude, location.longitude);
+        if (!throttled) {
+          currentWeather = await fetchWeatherForLocation(location.latitude, location.longitude);
 
-        // Use station data as fallback if fetch failed
-        if (!currentWeather.available) {
-          console.log(`[alert-monitor] Using station data as fallback for subscription #${id}`);
-          currentWeather = stationWeather;
+          // Use station data as fallback if fetch failed
+          if (!currentWeather.available) {
+            console.log(`[alert-monitor] Using station data as fallback for subscription #${id}`);
+            currentWeather = stationWeather;
+          }
         }
 
         // Fetch alerts for user's location
@@ -165,31 +231,31 @@ export async function checkAndSendAlerts() {
         }
       }
 
+      // 1. Watches & warnings: each new or updated NWS message is pushed once
+      // (tracked by NWS ID), so an alert that stays active never repeats.
+      const warnings = userAlerts
+        .filter((alert) => isPushableAlert(alert) && !hasAlertBeenSent(id, alert.id))
+        .map((alert) => ({
+          title: `⚠️ Severe Weather in ${locationName}`,
+          body: `${alert.event}: ${alert.headline || 'Check for details'}`,
+          tag: `severe-weather-${alert.id}`, // own tag, so it can't silently replace another alert
+          requireInteraction: true,
+          data: { type: 'severe-weather', url: '/' },
+          nwsAlertId: alert.id
+        }));
+      alertsSent += await sendAlerts(sub, locationName, warnings);
+
+      // Temperature/wind/rain alerts below respect the minimum interval
+      if (throttled) {
+        continue;
+      }
+
       if (!currentWeather) {
         console.warn(`[alert-monitor] No weather data available for subscription #${id}`);
         continue;
       }
 
       const alerts = [];
-
-      // 1. Check severe weather alerts
-      if (preferences.severeWeather && userAlerts.length > 0) {
-        const severeTypes = ['Tornado', 'Thunderstorm', 'Flood'];
-        const severeAlerts = userAlerts.filter(alert =>
-          severeTypes.some(type => alert.event && alert.event.includes(type))
-        );
-
-        if (severeAlerts.length > 0) {
-          const firstAlert = severeAlerts[0];
-          alerts.push({
-            title: `⚠️ Severe Weather in ${locationName}`,
-            body: `${firstAlert.event}: ${firstAlert.headline || 'Check for details'}`,
-            tag: 'severe-weather',
-            requireInteraction: true,
-            data: { type: 'severe-weather', url: '/' }
-          });
-        }
-      }
 
       // 2. Check temperature thresholds
       if (preferences.customAlerts && preferences.customAlerts.tempBelow && preferences.customAlerts.tempBelow.enabled) {
@@ -239,29 +305,7 @@ export async function checkAndSendAlerts() {
       }
 
       // Send alerts if any conditions were met
-      if (alerts.length > 0) {
-        console.log(`[alert-monitor] Sending ${alerts.length} alert(s) to subscription #${id} (${locationName})`);
-
-        for (const alert of alerts) {
-          const payload = {
-            title: alert.title,
-            body: alert.body,
-            icon: '/local-weather-lab-logo.png',
-            badge: '/local-weather-lab-logo.png',
-            tag: alert.tag,
-            requireInteraction: alert.requireInteraction || false,
-            data: alert.data,
-            url: alert.data.url
-          };
-
-          const sent = await sendPushNotification(subscription, payload);
-
-          if (sent) {
-            updateLastAlertSent(id);
-            alertsSent++;
-          }
-        }
-      }
+      alertsSent += await sendAlerts(sub, locationName, alerts);
     }
 
     if (alertsSent > 0) {

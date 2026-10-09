@@ -7,7 +7,8 @@
     "start": "node startup.js",
     "start:server": "node server.js",
     "backfill": "node backfill.js",
-    "collect": "node collector.js"
+    "collect": "node collector.js",
+    "test": "node --test --experimental-test-module-mocks --disable-warning=ExperimentalWarning test/*.test.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.3.0",

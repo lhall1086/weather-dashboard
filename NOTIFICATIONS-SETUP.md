@@ -149,17 +149,16 @@ Wait about 2-3 minutes for Render to restart, then:
 **Subscription Management:**
 - Stores in SQLite database
 - Removes expired subscriptions automatically
-- Prevents spam (max 1 alert per 15 minutes per user)
+- Prevents spam: each NWS watch/warning is pushed once when issued and once per NWS update (tracked by NWS alert ID); temperature/wind/rain alerts max 1 per 15 minutes per user
 
 ---
 
 ## 📊 **What Alerts Are Sent**
 
 ### **1. Severe Weather Alerts** ⚠️
-- Tornado warnings
-- Thunderstorm warnings
-- Flood warnings
-- Automatically sent when NWS issues alerts
+- Watches and warnings only: Tornado, Severe Thunderstorm, Flood, Flash Flood, Coastal/Lakeshore Flood, Tropical Storm, Hurricane
+- Sent when NWS issues or updates one for the subscriber's area
+- Never sent: statements, advisories, outlooks, discussions, cancellations, or "will expire" notices
 
 ### **2. Temperature Alerts** 🌡️
 - Temperature drops below X°F

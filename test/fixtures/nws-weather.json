@@ -1,0 +1,374 @@
+{
+  "alertsEnvelope": {
+    "@context": [
+      "https://geojson.org/geojson-ld/geojson-context.jsonld",
+      {
+        "@version": "1.1",
+        "wx": "https://api.weather.gov/ontology#",
+        "@vocab": "https://api.weather.gov/ontology#"
+      }
+    ],
+    "type": "FeatureCollection",
+    "title": "Current watches, warnings, and advisories for 32.5776 N, 85.7583 W",
+    "updated": "2026-10-09T21:03:37+00:00"
+  },
+  "points": {
+    "@context": [
+      "https://geojson.org/geojson-ld/geojson-context.jsonld",
+      {
+        "@version": "1.1",
+        "wx": "https://api.weather.gov/ontology#",
+        "s": "https://schema.org/",
+        "geo": "http://www.opengis.net/ont/geosparql#",
+        "unit": "http://codes.wmo.int/common/unit/",
+        "@vocab": "https://api.weather.gov/ontology#",
+        "geometry": {
+          "@id": "s:GeoCoordinates",
+          "@type": "geo:wktLiteral"
+        },
+        "city": "s:addressLocality",
+        "state": "s:addressRegion",
+        "distance": {
+          "@id": "s:Distance",
+          "@type": "s:QuantitativeValue"
+        },
+        "bearing": {
+          "@type": "s:QuantitativeValue"
+        },
+        "value": {
+          "@id": "s:value"
+        },
+        "unitCode": {
+          "@id": "s:unitCode",
+          "@type": "@id"
+        },
+        "forecastOffice": {
+          "@type": "@id"
+        },
+        "forecastGridData": {
+          "@type": "@id"
+        },
+        "publicZone": {
+          "@type": "@id"
+        },
+        "county": {
+          "@type": "@id"
+        }
+      }
+    ],
+    "id": "https://api.weather.gov/points/32.5776,-85.7583",
+    "type": "Feature",
+    "geometry": {
+      "type": "Point",
+      "coordinates": [
+        -85.7583,
+        32.5776
+      ]
+    },
+    "properties": {
+      "@id": "https://api.weather.gov/points/32.5776,-85.7583",
+      "@type": "wx:Point",
+      "cwa": "BMX",
+      "type": "land",
+      "forecastOffice": "https://api.weather.gov/offices/BMX",
+      "gridId": "BMX",
+      "gridX": 101,
+      "gridY": 45,
+      "forecast": "https://api.weather.gov/gridpoints/BMX/101,45/forecast",
+      "forecastHourly": "https://api.weather.gov/gridpoints/BMX/101,45/forecast/hourly",
+      "forecastGridData": "https://api.weather.gov/gridpoints/BMX/101,45",
+      "observationStations": "https://api.weather.gov/gridpoints/BMX/101,45/stations",
+      "relativeLocation": {
+        "type": "Feature",
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            -85.8195624,
+            32.5742107
+          ]
+        },
+        "properties": {
+          "city": "Reeltown",
+          "state": "AL",
+          "distance": {
+            "unitCode": "wmoUnit:m",
+            "value": 2859.0283095283
+          },
+          "bearing": {
+            "unitCode": "wmoUnit:degree_(angle)",
+            "value": 86
+          }
+        }
+      },
+      "forecastZone": "https://api.weather.gov/zones/forecast/ALZ045",
+      "county": "https://api.weather.gov/zones/county/ALC087",
+      "fireWeatherZone": "https://api.weather.gov/zones/fire/ALZ045",
+      "timeZone": "America/Chicago",
+      "radarStation": "KMXX",
+      "astronomicalData": {
+        "sunrise": "2026-10-09T06:42:46-05:00",
+        "sunset": "2026-10-09T18:17:40-05:00",
+        "transit": "2026-10-09T12:30:13-05:00",
+        "civilTwilightBegin": "2026-10-09T06:18:12-05:00",
+        "civilTwilightEnd": "2026-10-09T18:42:14-05:00",
+        "nauticalTwilightBegin": "2026-10-09T05:49:42-05:00",
+        "nauticalTwilightEnd": "2026-10-09T19:10:44-05:00",
+        "astronomicalTwilightBegin": "2026-10-09T05:21:12-05:00",
+        "astronomicalTwilightEnd": "2026-10-09T19:39:14-05:00"
+      },
+      "nwr": {
+        "transmitter": "WWF54",
+        "sameCode": "001087",
+        "areaBroadcast": "https://api.weather.gov/radio/WWF54/broadcast",
+        "pointBroadcast": "https://api.weather.gov/points/32.5776,-85.7583/radio"
+      }
+    }
+  },
+  "stations": {
+    "@context": [
+      "https://geojson.org/geojson-ld/geojson-context.jsonld",
+      {
+        "@version": "1.1",
+        "wx": "https://api.weather.gov/ontology#",
+        "s": "https://schema.org/",
+        "geo": "http://www.opengis.net/ont/geosparql#",
+        "unit": "http://codes.wmo.int/common/unit/",
+        "@vocab": "https://api.weather.gov/ontology#",
+        "geometry": {
+          "@id": "s:GeoCoordinates",
+          "@type": "geo:wktLiteral"
+        },
+        "city": "s:addressLocality",
+        "state": "s:addressRegion",
+        "distance": {
+          "@id": "s:Distance",
+          "@type": "s:QuantitativeValue"
+        },
+        "bearing": {
+          "@type": "s:QuantitativeValue"
+        },
+        "value": {
+          "@id": "s:value"
+        },
+        "unitCode": {
+          "@id": "s:unitCode",
+          "@type": "@id"
+        },
+        "forecastOffice": {
+          "@type": "@id"
+        },
+        "forecastGridData": {
+          "@type": "@id"
+        },
+        "publicZone": {
+          "@type": "@id"
+        },
+        "county": {
+          "@type": "@id"
+        },
+        "observationStations": {
+          "@container": "@list",
+          "@type": "@id"
+        }
+      }
+    ],
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "id": "https://api.weather.gov/stations/KAUO",
+        "type": "Feature",
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            -85.43333,
+            32.61667
+          ]
+        },
+        "properties": {
+          "@id": "https://api.weather.gov/stations/KAUO",
+          "@type": "wx:ObservationStation",
+          "elevation": {
+            "unitCode": "wmoUnit:m",
+            "value": 235.9152
+          },
+          "stationIdentifier": "KAUO",
+          "name": "Auburn-Opelika Airport",
+          "timeZone": "America/Chicago",
+          "provider": "ASOS-HFM",
+          "subProvider": "",
+          "distance": {
+            "unitCode": "wmoUnit:m",
+            "value": 30427.765783869
+          },
+          "bearing": {
+            "unitCode": "wmoUnit:degree_(angle)",
+            "value": 79
+          },
+          "forecast": "https://api.weather.gov/zones/forecast/ALZ047",
+          "county": "https://api.weather.gov/zones/county/ALC081",
+          "fireWeatherZone": "https://api.weather.gov/zones/fire/ALZ047"
+        }
+      }
+    ],
+    "observationStations": [
+      "https://api.weather.gov/stations/KAUO"
+    ],
+    "pagination": {
+      "next": "https://api.weather.gov/stations?id%5B0%5D=K1M4&id%5B1%5D=K47A&id%5B2%5D=K4A9&id%5B3%5D=KABY&id%5B4%5D=KALX&id%5B5%5D=KANB&id%5B6%5D=KASN&id%5B7%5D=KATL&id%5B8%5D=KAUO&id%5B9%5D=KBHM&id%5B10%5D=KBIJ&id%5B11%5D=KCCO&id%5B12%5D=KCHA&id%5B13%5D=KCMD&id%5B14%5D=KCSG&id%5B15%5D=KDCU&id%5B16%5D=KDNN&id%5B17%5D=KDYA&id%5B18%5D=KEET&id%5B19%5D=KEUF&id%5B20%5D=KFFC&id%5B21%5D=KFTY&id%5B22%5D=KGAD&id%5B23%5D=KGTR&id%5B24%5D=KGVL&id%5B25%5D=KGZH&id%5B26%5D=KHSV&id%5B27%5D=KJFX&id%5B28%5D=KLGC&id%5B29%5D=KLSF&id%5B30%5D=KLZU&id%5B31%5D=KMDQ&id%5B32%5D=KMEI&id%5B33%5D=KMGE&id%5B34%5D=KMGM&id%5B35%5D=KMSL&id%5B36%5D=KOPN&id%5B37%5D=KPDK&id%5B38%5D=KPIB&id%5B39%5D=KPLR&id%5B40%5D=KRHP&id%5B41%5D=KRMG&id%5B42%5D=KRYY&id%5B43%5D=KSEM&id%5B44%5D=KTCL&id%5B45%5D=KTOI&id%5B46%5D=KTUP&id%5B47%5D=KVPC&cursor=eyJzIjo1MDB9"
+    }
+  },
+  "observation": {
+    "@context": [
+      "https://geojson.org/geojson-ld/geojson-context.jsonld",
+      {
+        "@version": "1.1",
+        "wx": "https://api.weather.gov/ontology#",
+        "s": "https://schema.org/",
+        "geo": "http://www.opengis.net/ont/geosparql#",
+        "unit": "http://codes.wmo.int/common/unit/",
+        "@vocab": "https://api.weather.gov/ontology#",
+        "geometry": {
+          "@id": "s:GeoCoordinates",
+          "@type": "geo:wktLiteral"
+        },
+        "city": "s:addressLocality",
+        "state": "s:addressRegion",
+        "distance": {
+          "@id": "s:Distance",
+          "@type": "s:QuantitativeValue"
+        },
+        "bearing": {
+          "@type": "s:QuantitativeValue"
+        },
+        "value": {
+          "@id": "s:value"
+        },
+        "unitCode": {
+          "@id": "s:unitCode",
+          "@type": "@id"
+        },
+        "forecastOffice": {
+          "@type": "@id"
+        },
+        "forecastGridData": {
+          "@type": "@id"
+        },
+        "publicZone": {
+          "@type": "@id"
+        },
+        "county": {
+          "@type": "@id"
+        }
+      }
+    ],
+    "id": "https://api.weather.gov/stations/KAUO/observations/2026-10-09T21:00:00+00:00",
+    "type": "Feature",
+    "geometry": {
+      "type": "Point",
+      "coordinates": [
+        -85.43,
+        32.62
+      ]
+    },
+    "properties": {
+      "@id": "https://api.weather.gov/stations/KAUO/observations/2026-10-09T21:00:00+00:00",
+      "@type": "wx:ObservationStation",
+      "elevation": {
+        "unitCode": "wmoUnit:m",
+        "value": 236
+      },
+      "station": "https://api.weather.gov/stations/KAUO",
+      "stationId": "KAUO",
+      "stationName": "Auburn-Opelika Airport",
+      "timestamp": "2026-10-09T21:00:00+00:00",
+      "rawMessage": "",
+      "textDescription": "Light Rain",
+      "icon": "https://api.weather.gov/icons/land/day/rain?size=medium",
+      "presentWeather": [
+        {
+          "intensity": "light",
+          "modifier": null,
+          "weather": "rain",
+          "rawString": "-RA"
+        }
+      ],
+      "temperature": {
+        "unitCode": "wmoUnit:degC",
+        "value": 19,
+        "qualityControl": "V"
+      },
+      "dewpoint": {
+        "unitCode": "wmoUnit:degC",
+        "value": 16,
+        "qualityControl": "V"
+      },
+      "windDirection": {
+        "unitCode": "wmoUnit:degree_(angle)",
+        "value": 60,
+        "qualityControl": "V"
+      },
+      "windSpeed": {
+        "unitCode": "wmoUnit:km_h-1",
+        "value": 22.212,
+        "qualityControl": "V"
+      },
+      "windGust": {
+        "unitCode": "wmoUnit:km_h-1",
+        "value": null,
+        "qualityControl": "Z"
+      },
+      "barometricPressure": {
+        "unitCode": "wmoUnit:Pa",
+        "value": 101693.25,
+        "qualityControl": "V"
+      },
+      "seaLevelPressure": {
+        "unitCode": "wmoUnit:Pa",
+        "value": null,
+        "qualityControl": "Z"
+      },
+      "visibility": {
+        "unitCode": "wmoUnit:m",
+        "value": 16093.44,
+        "qualityControl": "C"
+      },
+      "maxTemperatureLast24Hours": {
+        "unitCode": "wmoUnit:degC",
+        "value": null
+      },
+      "minTemperatureLast24Hours": {
+        "unitCode": "wmoUnit:degC",
+        "value": null
+      },
+      "precipitationLast3Hours": {
+        "unitCode": "wmoUnit:mm",
+        "value": null,
+        "qualityControl": "Z"
+      },
+      "relativeHumidity": {
+        "unitCode": "wmoUnit:percent",
+        "value": 82.752266062258,
+        "qualityControl": "V"
+      },
+      "windChill": {
+        "unitCode": "wmoUnit:degC",
+        "value": null,
+        "qualityControl": "V"
+      },
+      "heatIndex": {
+        "unitCode": "wmoUnit:degC",
+        "value": null,
+        "qualityControl": "V"
+      },
+      "cloudLayers": [
+        {
+          "base": {
+            "unitCode": "wmoUnit:m",
+            "value": 3352.8
+          },
+          "amount": "OVC"
+        }
+      ]
+    }
+  }
+}

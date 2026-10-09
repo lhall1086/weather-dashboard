@@ -107,7 +107,10 @@ export async function fetchAlerts() {
   const list = (alerts.features || []).map((f) => {
     const p = f.properties;
     return {
+      id: p.id,
       event: p.event,
+      status: p.status,
+      vtec: p.parameters?.VTEC || [],
       severity: p.severity,
       urgency: p.urgency,
       certainty: p.certainty,

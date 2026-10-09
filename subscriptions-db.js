@@ -40,6 +40,18 @@ export function initSubscriptionsTable() {
     // Column already exists, ignore
   }
 
+  // One row per NWS alert message pushed to a subscriber. NWS gives every new
+  // issuance and every update its own ID, so a watch/warning is pushed once per
+  // issue/update instead of on every check.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sent_alerts (
+      subscription_id INTEGER NOT NULL,
+      alert_id TEXT NOT NULL,
+      sent_at INTEGER NOT NULL,
+      PRIMARY KEY (subscription_id, alert_id)
+    )
+  `);
+
   console.log('[subscriptions] Table initialized with location support');
 }
 
@@ -122,6 +134,24 @@ export function updateSubscriptionLocation(endpoint, location) {
 export function updateLastAlertSent(subscriptionId) {
   const stmt = db.prepare('UPDATE push_subscriptions SET last_alert_sent = ? WHERE id = ?');
   stmt.run(Date.now(), subscriptionId);
+}
+
+// Has this NWS alert message (by NWS alert ID) already been pushed to this subscriber?
+export function hasAlertBeenSent(subscriptionId, alertId) {
+  const stmt = db.prepare('SELECT 1 FROM sent_alerts WHERE subscription_id = ? AND alert_id = ?');
+  return stmt.get(subscriptionId, alertId) !== undefined;
+}
+
+// Record that an NWS alert message was pushed to this subscriber
+export function markAlertSent(subscriptionId, alertId) {
+  const stmt = db.prepare('INSERT OR IGNORE INTO sent_alerts (subscription_id, alert_id, sent_at) VALUES (?, ?, ?)');
+  stmt.run(subscriptionId, alertId, Date.now());
+}
+
+// Forget alerts pushed more than maxAgeMs ago (long since updated or expired)
+export function pruneSentAlerts(maxAgeMs) {
+  const stmt = db.prepare('DELETE FROM sent_alerts WHERE sent_at < ?');
+  stmt.run(Date.now() - maxAgeMs);
 }
 
 // Remove a subscription (called when push fails or user unsubscribes)
