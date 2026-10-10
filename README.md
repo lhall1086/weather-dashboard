@@ -182,8 +182,9 @@ Three more data products strengthen the dashboard:
    Click any alert to expand the full NWS text (what/where/when/impacts, what to do, areas,
    times, issuing office). Active **SPC mesoscale discussions** covering the station (or the
    visitor's location) appear in the same list (purple), with SPC's full text and map.
-   Below it, while an Atlantic storm is active, the **NHC "Watches/Warnings Forecast Cone for
-   Storm Center"** graphic appears and swaps in NHC's newest graphic automatically.
+   An **NHC "Watches/Warnings Forecast Cone for Storm Center"** panel is built but hidden; set
+   `SHOW_NHC_CONE` to `true` in `public/app.js` to show it below the alerts (only while an
+   Atlantic storm is active; it swaps in NHC's newest graphic automatically).
 
 2. **Hourly forecast** (next 24h) — NWS gridpoint hourly forecast: temp, precip %, humidity, wind.
    Denser near-term view than the 12h day/night periods. Refreshed hourly.

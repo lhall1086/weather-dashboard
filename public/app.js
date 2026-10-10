@@ -570,6 +570,8 @@ if ($('#location-toggle-btn')) {
 // ---- NHC forecast cone (active Atlantic storms) ----
 // NHC gives every new cone graphic a new URL, so re-checking /api/nhc every
 // 5 minutes swaps in the latest graphic without a page reload.
+// The panel is hidden for now; set SHOW_NHC_CONE to true to bring it back.
+const SHOW_NHC_CONE = false;
 let lastNHCRender = '';
 
 function stormHTML(s) {
@@ -1220,7 +1222,6 @@ loadBriefing();
 loadSPCOutlook();
 load7Day();
 loadAlerts();
-loadNHC();
 loadIndices();
 loadPrecip();
 loadAstronomy();
@@ -1236,7 +1237,10 @@ setInterval(loadBriefing, 60 * 60 * 1000);  // briefing refreshes hourly
 setInterval(loadSPCOutlook, 30 * 60 * 1000); // SPC outlook refreshes every 30 min
 setInterval(load7Day, 60 * 60 * 1000);      // 7-day refreshes hourly
 setInterval(loadAlerts, 2 * 60 * 1000);     // alerts refresh every 2 min (time-sensitive)
-setInterval(loadNHC, 5 * 60 * 1000);        // NHC cone: picks up a new graphic within ~10 min (server caches 5 min)
+if (SHOW_NHC_CONE) {
+  loadNHC();
+  setInterval(loadNHC, 5 * 60 * 1000);      // NHC cone: picks up a new graphic within ~10 min (server caches 5 min)
+}
 setInterval(loadIndices, REFRESH_MS);       // indices refresh with new station data
 setInterval(loadPrecip, REFRESH_MS);        // precip analysis refreshes with new station data
 setInterval(loadHourly, 60 * 60 * 1000);    // hourly forecast refresh every hour
